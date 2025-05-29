@@ -309,25 +309,6 @@ NL_2_SQL/
 - ⚙️ [SQLGlot](https://github.com/tobymao/sqlglot) - SQL transpilation
 - 📚 [NL2SQL Handbook](https://github.com/HKUSTDial/NL2SQL_Handbook) - Research reference
 
-## 📋 Roadmap
-
-### Week 1-2 ✅ (Completed)
-- [x] Basic NL2SQL pipeline
-- [x] Schema-aware prompt generation
-- [x] T5 model integration
-- [x] Web interface development
-
-### Week 3-4 (In Progress)
-- [ ] Advanced error handling and validation
-- [ ] Performance optimization
-- [ ] Extended database dialect support
-- [ ] Enhanced visualization capabilities
-
-### Week 5+ (Future)
-- [ ] Custom model fine-tuning interface
-- [ ] API endpoint development
-- [ ] Advanced security features
-- [ ] Multi-language support
 
 ## 🐛 Troubleshooting
 
@@ -351,9 +332,6 @@ NL_2_SQL/
 - Review logs in `nl2sql_agent.log`
 - Open an issue on GitHub with error details
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
