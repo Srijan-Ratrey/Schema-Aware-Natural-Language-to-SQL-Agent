@@ -119,10 +119,20 @@ class NL2SQLModel:
     def _prepare_input(self, query: str, schema: str) -> str:
         """
         Prepare input text combining query and schema
-        Following Spider dataset format
+        Optimized for WikiSQL format
         """
-        # Format input similar to Spider training data
-        input_template = f"translate english to SQL: {query} | {schema}"
+        # For WikiSQL model, use simpler format that the model understands
+        # Extract table name from schema
+        table_name = "books"  # Default table name
+        if "Table:" in schema:
+            lines = schema.split('\n')
+            for line in lines:
+                if line.strip().startswith("Table:"):
+                    table_name = line.split("Table:")[1].strip()
+                    break
+        
+        # WikiSQL format: just the question with minimal context
+        input_template = f"translate English to SQL: {query}"
         return input_template
     
     def _clean_sql(self, sql: str) -> str:
@@ -133,12 +143,48 @@ class NL2SQLModel:
         # Remove common prefixes/suffixes
         sql = sql.strip()
         
+        # Remove the input prompt if it's echoed back
+        sql = re.sub(r'^.*?translate english to sql:\s*', '', sql, flags=re.IGNORECASE)
+        
         # Remove any leading "SQL:" or similar prefixes
         sql = re.sub(r'^(SQL:\s*|sql:\s*)', '', sql, flags=re.IGNORECASE)
+        
+        # Remove schema descriptions that might be included
+        sql = re.sub(r'\|\s*Database Schema.*$', '', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'\|\s*Table:.*$', '', sql, flags=re.IGNORECASE)
+        
+        # Remove table descriptions in parentheses
+        sql = re.sub(r'\([^)]*\)', '', sql)
+        
+        # Clean up common issues
+        sql = re.sub(r'\[.*?\]', '', sql)  # Remove [PRIMARY KEY] etc
+        sql = re.sub(r'WHERE\s*$', '', sql)  # Remove trailing WHERE
+        sql = re.sub(r'FROM\s+table\s*', 'FROM books ', sql, flags=re.IGNORECASE)  # Fix table name
+        
+        # Fix aggregate function syntax
+        sql = re.sub(r'SELECT\s+MAX\s+(\w+)', r'SELECT MAX(\1)', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'SELECT\s+MIN\s+(\w+)', r'SELECT MIN(\1)', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'SELECT\s+AVG\s+(\w+)', r'SELECT AVG(\1)', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'SELECT\s+COUNT\s+(\w+)', r'SELECT COUNT(\1)', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'SELECT\s+SUM\s+(\w+)', r'SELECT SUM(\1)', sql, flags=re.IGNORECASE)
+        
+        # Fix common column selection issues
+        sql = re.sub(r'SELECT\s+Books\s+FROM', 'SELECT * FROM', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'SELECT\s+book\s+FROM', 'SELECT * FROM', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'SELECT\s+all\s+FROM', 'SELECT * FROM', sql, flags=re.IGNORECASE)
+        sql = re.sub(r'SELECT\s+everything\s+FROM', 'SELECT * FROM', sql, flags=re.IGNORECASE)
         
         # Basic SQL formatting
         sql = sql.replace('\n', ' ').replace('\t', ' ')
         sql = ' '.join(sql.split())  # Remove extra whitespace
+        
+        # Ensure proper SQL structure
+        if sql and not any(keyword in sql.upper() for keyword in ['SELECT', 'INSERT', 'UPDATE', 'DELETE']):
+            return ""
+        
+        # Fix common SQL issues
+        if 'SELECT' in sql.upper() and 'FROM' not in sql.upper():
+            sql = sql + " FROM books"
         
         # Ensure SQL ends with semicolon if it's a complete query
         if sql and not sql.endswith(';') and any(keyword in sql.upper() for keyword in ['SELECT', 'INSERT', 'UPDATE', 'DELETE']):

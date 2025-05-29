@@ -47,6 +47,14 @@ class NL2SQLAgent:
         
         # Performance tracking
         self.query_history = []
+        self.statistics = {
+            "total_queries": 0,
+            "successful_queries": 0,
+            "failed_queries": 0,
+            "total_processing_time": 0.0,
+            "average_processing_time": 0.0,
+            "start_time": time.time()
+        }
         
         logger.info("NL2SQL Agent initialized")
     
@@ -100,109 +108,124 @@ class NL2SQLAgent:
             logger.error(f"Failed to load model: {e}")
             return False
     
-    def query(
-        self,
-        natural_language_query: str,
-        execute: bool = True,
-        return_sql: bool = True,
-        validate_only: bool = False
-    ) -> Dict[str, Any]:
+    def process_query(self, natural_language_query: str) -> Dict[str, Any]:
         """
-        Process natural language query and return results
+        Process a natural language query and return SQL + results
         
         Args:
             natural_language_query: User's question in natural language
-            execute: Whether to execute the generated SQL
-            return_sql: Whether to include SQL in response
-            validate_only: Only validate SQL without executing
             
         Returns:
-            Dictionary containing results, SQL, and metadata
+            Dictionary containing generated SQL, results, and metadata
         """
         start_time = time.time()
         
-        # Check prerequisites
-        if not self.model:
-            return self._error_response("Model not loaded. Call load_model() first.")
-        
-        if not self.schema_retriever:
-            return self._error_response("No database connected. Call connect_database() first.")
-        
         try:
-            # Step 1: Generate schema prompt
-            schema_prompt = self.schema_retriever.get_schema_prompt()
+            # Get schema information (use simplified version for WikiSQL models)
+            schema_prompt = self.schema_retriever.get_simple_schema_prompt()
             
-            # Step 2: Generate SQL using the model
+            # Generate SQL using the model
             generation_result = self.model.generate_sql(
-                natural_language_query=natural_language_query,
-                database_schema=schema_prompt
+                natural_language_query, 
+                schema_prompt
             )
             
             if generation_result.get("error"):
-                return self._error_response(f"SQL generation failed: {generation_result['error']}")
+                return {
+                    "success": False,
+                    "error": generation_result["error"],
+                    "query": natural_language_query,
+                    "processing_time": time.time() - start_time
+                }
             
             generated_sql = generation_result["sql_query"]
+            confidence_score = generation_result["confidence_score"]
             
-            # Step 3: Validate SQL
-            validation_result = self.schema_retriever.validate_query(generated_sql)
+            # Validate SQL
+            validation_result = self.schema_retriever.simple_validate_query(generated_sql)
             
-            response = {
-                "success": True,
-                "natural_language_query": natural_language_query,
-                "confidence_score": generation_result.get("confidence_score", 0.0),
-                "sql_valid": validation_result["valid"],
-                "validation_message": validation_result["message"],
-                "execution_time": time.time() - start_time,
-                "timestamp": time.time()
-            }
+            if not validation_result["valid"]:
+                return {
+                    "success": False,
+                    "error": f"SQL validation failed: {validation_result['message']}",
+                    "generated_sql": generated_sql,
+                    "query": natural_language_query,
+                    "confidence_score": confidence_score,
+                    "processing_time": time.time() - start_time
+                }
             
-            # Include SQL if requested
-            if return_sql:
-                response["generated_sql"] = generated_sql
-            
-            # If validation only, return here
-            if validate_only:
-                self._log_query(natural_language_query, generated_sql, response)
-                return response
-            
-            # Step 4: Execute SQL if requested and valid
-            if execute and validation_result["valid"]:
-                try:
-                    results_df = self.schema_retriever.execute_query(generated_sql)
-                    
-                    response.update({
-                        "results": results_df.to_dict('records'),
-                        "num_results": len(results_df),
-                        "columns": list(results_df.columns),
-                        "executed": True
-                    })
-                    
-                except Exception as e:
-                    response.update({
-                        "executed": False,
-                        "execution_error": str(e),
-                        "results": None
-                    })
-            elif execute and not validation_result["valid"]:
-                response.update({
-                    "executed": False,
-                    "execution_error": "SQL validation failed",
-                    "results": None
+            # Execute query
+            try:
+                results_df = self.schema_retriever.execute_query(generated_sql)
+                results = results_df.to_dict('records') if not results_df.empty else []
+                
+                # Store in history
+                query_result = {
+                    "query": natural_language_query,
+                    "sql": generated_sql,
+                    "results": results,
+                    "confidence": confidence_score,
+                    "timestamp": time.time(),
+                    "success": True,
+                    "row_count": len(results)
+                }
+                
+                self.query_history.append(query_result)
+                self.statistics["total_queries"] += 1
+                self.statistics["successful_queries"] += 1
+                
+                processing_time = time.time() - start_time
+                self.statistics["total_processing_time"] += processing_time
+                
+                return {
+                    "success": True,
+                    "generated_sql": generated_sql,
+                    "results": results,
+                    "results_df": results_df,
+                    "confidence_score": confidence_score,
+                    "query": natural_language_query,
+                    "processing_time": processing_time,
+                    "row_count": len(results)
+                }
+                
+            except Exception as e:
+                error_msg = f"Query execution failed: {str(e)}"
+                logger.error(error_msg)
+                
+                self.query_history.append({
+                    "query": natural_language_query,
+                    "sql": generated_sql,
+                    "error": error_msg,
+                    "confidence": confidence_score,
+                    "timestamp": time.time(),
+                    "success": False
                 })
-            else:
-                response.update({
-                    "executed": False,
-                    "results": None
-                })
-            
-            # Log query
-            self._log_query(natural_language_query, generated_sql, response)
-            
-            return response
-            
+                
+                self.statistics["total_queries"] += 1
+                self.statistics["failed_queries"] += 1
+                
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "generated_sql": generated_sql,
+                    "query": natural_language_query,
+                    "confidence_score": confidence_score,
+                    "processing_time": time.time() - start_time
+                }
+                
         except Exception as e:
-            logger.error(f"Error processing query: {e}")
-            return self._error_response(f"Query processing failed: {str(e)}")
+            error_msg = f"Processing failed: {str(e)}"
+            logger.error(error_msg)
+            
+            self.statistics["total_queries"] += 1
+            self.statistics["failed_queries"] += 1
+            
+            return {
+                "success": False,
+                "error": error_msg,
+                "query": natural_language_query,
+                "processing_time": time.time() - start_time
+            }
     
     def explain_sql(self, sql_query: str) -> Dict[str, Any]:
         """
@@ -303,7 +326,7 @@ class NL2SQLAgent:
         results = []
         
         for query in queries:
-            result = self.query(query, execute=execute)
+            result = self.process_query(query)
             results.append(result)
         
         return results

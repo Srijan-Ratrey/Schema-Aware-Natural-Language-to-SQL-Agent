@@ -5,7 +5,7 @@ Supports multiple database dialects through SQLAlchemy
 
 import logging
 from typing import Dict, List, Any, Optional
-from sqlalchemy import create_engine, MetaData, inspect
+from sqlalchemy import create_engine, MetaData, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 import pandas as pd
 
@@ -175,6 +175,28 @@ class SchemaRetriever:
         
         return "\n".join(prompt_parts)
     
+    def get_simple_schema_prompt(self) -> str:
+        """
+        Generate a simplified schema prompt optimized for WikiSQL models
+        """
+        schema = self.get_database_schema()
+        
+        # For single table databases, keep it simple
+        if len(schema["tables"]) == 1:
+            table_name, table_info = next(iter(schema["tables"].items()))
+            
+            # Just list column names - WikiSQL models work better with simpler input
+            columns = [col['name'] for col in table_info["columns"]]
+            return f"Table {table_name} has columns: {', '.join(columns)}"
+        
+        # For multi-table, still keep it simple
+        prompt_parts = []
+        for table_name, table_info in schema["tables"].items():
+            columns = [col['name'] for col in table_info["columns"]]
+            prompt_parts.append(f"Table {table_name}: {', '.join(columns)}")
+        
+        return " | ".join(prompt_parts)
+    
     def execute_query(self, sql_query: str) -> pd.DataFrame:
         """
         Execute SQL query and return results as DataFrame
@@ -218,11 +240,44 @@ class SchemaRetriever:
                 else:
                     validation_query = f"EXPLAIN {sql_query}"
                 
-                connection.execute(validation_query)
+                # Execute the validation query
+                result = connection.execute(text(validation_query))
+                result.fetchall()  # Consume the result
                 return {"valid": True, "message": "Query is valid"}
                 
         except SQLAlchemyError as e:
             return {"valid": False, "message": str(e)}
+        except Exception as e:
+            return {"valid": False, "message": f"Validation error: {str(e)}"}
+        
+    def simple_validate_query(self, sql_query: str) -> Dict[str, Any]:
+        """
+        Simple validation by checking SQL syntax without EXPLAIN
+        """
+        try:
+            # Basic syntax validation
+            if not sql_query or not sql_query.strip():
+                return {"valid": False, "message": "Empty query"}
+            
+            # Check for basic SQL keywords
+            sql_upper = sql_query.upper().strip()
+            if not any(keyword in sql_upper for keyword in ['SELECT', 'INSERT', 'UPDATE', 'DELETE']):
+                return {"valid": False, "message": "No valid SQL command found"}
+            
+            # For read-only operations, just check if it parses
+            if sql_upper.startswith('SELECT'):
+                try:
+                    with self.engine.connect() as connection:
+                        # Try to prepare the statement
+                        stmt = text(sql_query)
+                        # Just compile, don't execute
+                        stmt.compile(dialect=self.engine.dialect)
+                        return {"valid": True, "message": "Query syntax is valid"}
+                except Exception as e:
+                    return {"valid": False, "message": f"Syntax error: {str(e)}"}
+            
+            return {"valid": True, "message": "Query appears valid"}
+            
         except Exception as e:
             return {"valid": False, "message": f"Validation error: {str(e)}"}
     

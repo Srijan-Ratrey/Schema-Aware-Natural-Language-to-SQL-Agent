@@ -121,24 +121,20 @@ def main():
                 # Process the question
                 print(f"\n🔍 Processing: {user_question}")
                 
-                result = agent.query(
-                    natural_language_query=user_question,
-                    execute=True,
-                    return_sql=True
-                )
+                result = agent.process_query(user_question)
                 
                 if result.get("success"):
                     print(f"✅ Generated SQL: {result.get('generated_sql')}")
                     print(f"   Confidence: {result.get('confidence_score', 0):.2f}")
                     
-                    if result.get('executed') and result.get('results'):
-                        print(f"\n📊 Results ({result.get('num_results', 0)} rows):")
+                    if result.get('results'):
+                        print(f"\n📊 Results ({result.get('row_count', 0)} rows):")
                         
                         # Display results in a simple table format
                         results = result['results']
                         if results:
                             # Print column headers
-                            columns = result.get('columns', [])
+                            columns = list(results[0].keys()) if results else []
                             if columns:
                                 header = " | ".join(f"{col:15}" for col in columns)
                                 print(f"   {header}")
@@ -151,8 +147,6 @@ def main():
                                 
                                 if len(results) > 10:
                                     print(f"   ... and {len(results) - 10} more rows")
-                    elif result.get('execution_error'):
-                        print(f"❌ Execution Error: {result['execution_error']}")
                     else:
                         print("ℹ️  Query executed but returned no results")
                 else:
