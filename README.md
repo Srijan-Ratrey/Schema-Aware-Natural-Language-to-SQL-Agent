@@ -1,346 +1,262 @@
-# 🧠 Schema-Aware NL2SQL: Adaptive Query Generation Across Databases
+# 🧠 Schema-Aware NL2SQL: Production-Ready Natural Language to SQL
+
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![API Docs](https://img.shields.io/badge/API-Documentation-green.svg)](docs/API_DOCUMENTATION.md)
 
 ## 🚀 Overview
 
-This project implements a comprehensive **Schema-Aware Natural Language to SQL (NL2SQL) Agent** that can understand natural language questions and generate accurate SQL queries across dynamic database schemas. The system enables users to query any relational database without knowing SQL, using state-of-the-art transformer models fine-tuned on the Spider dataset.
+A comprehensive **Schema-Aware Natural Language to SQL (NL2SQL) system** that converts natural language questions into accurate SQL queries across dynamic database schemas. Features both a web interface and production-ready REST API with deployment support for any cloud platform.
 
-## ✨ Features
+## ✨ Key Features
 
-### 🔧 Core Capabilities
-- **Dynamic Schema Extraction**: Automatically extracts database schemas from SQLite, PostgreSQL, and MySQL
-- **Fine-tuned T5 Models**: Uses Spider-trained models for high-quality SQL generation
-- **Multi-Database Support**: Works with different SQL dialects using SQLGlot transpilation
-- **Real-time Query Execution**: Validates and executes generated SQL queries safely
-- **Confidence Scoring**: Provides confidence metrics for generated queries
-- **Query History & Analytics**: Tracks performance and provides usage statistics
+- 🧠 **Schema-Aware Intelligence**: Dynamic schema extraction and understanding
+- 🔄 **Multi-Database Support**: SQLite, PostgreSQL, MySQL with dialect transpilation
+- 🌐 **Production API**: Complete REST API with authentication and monitoring
+- 🖥️ **Web Interface**: Intuitive Streamlit UI for interactive querying
+- 🚀 **Cloud Ready**: Docker, Kubernetes, and multi-cloud deployment support
+- 🔒 **Security First**: API authentication, SQL injection prevention, query validation
+- 📊 **Analytics**: Query history, confidence scoring, and usage statistics
+- 🧪 **Fully Tested**: Comprehensive test suite with CI/CD ready structure
 
-### 🎯 Web Interface Features
-- **Intuitive Streamlit UI**: User-friendly interface for natural language queries
-- **Schema Explorer**: Interactive database schema visualization and exploration
-- **Query Validation**: Real-time SQL validation before execution
-- **Data Visualization**: Automatic chart generation for query results
-- **Batch Processing**: Support for multiple queries in one session
-- **Example Queries**: Pre-built examples for quick testing
-
-### 🛡️ Security & Safety
-- **SQL Injection Prevention**: Validates queries before execution
-- **Read-only Operations**: Focuses on SELECT queries for data safety
-- **Query Complexity Analysis**: Estimates and displays query complexity
-- **Error Handling**: Comprehensive error reporting and graceful failure handling
-
-## 🧱 Architecture
+## 📁 Complete Project Structure
 
 ```
-[User Input: Natural Language]
-         ↓
-[Schema Retriever (SQLAlchemy)]
-         ↓
-[T5 Model (Fine-tuned on Spider)]
-         ↓
-[SQL Generation & Validation]
-         ↓
-[Query Execution Engine]
-         ↓
-[Results & Visualization]
-         ↓
-[Streamlit Web Interface]
+Schema-Aware-NL2SQL/
+├── 📄 README.md                       # Main documentation
+├── 📄 requirements.txt                # Python dependencies
+├── 📄 setup.py                        # Package setup
+├── 📄 config.py                       # Configuration management
+├── 📄 .env.example                    # Environment template
+├── 📄 .gitignore                      # Git ignore rules
+│
+├── 🔧 api.py                          # FastAPI REST API server
+├── 🖥️ app.py                          # Streamlit web interface
+├── 🎯 demo.py                         # Comprehensive demo script
+│
+├── 📂 src/                            # Core source code
+│   ├── __init__.py
+│   ├── nl2sql_agent.py                # Main orchestrator
+│   ├── nl2sql_model.py                # T5 model wrapper
+│   └── schema_retriever.py            # Database schema extraction
+│
+├── 📂 docs/                           # Documentation
+│   ├── README.md                      # Detailed documentation
+│   ├── API_DOCUMENTATION.md           # API reference
+│   ├── SETUP_COMPLETE.md              # Setup guide
+│   ├── ENVIRONMENT_SETUP.md           # Environment guide
+│   └── GITHUB_SETUP.md                # GitHub integration
+│
+├── 📂 examples/                       # Example scripts
+│   ├── quickstart.py                  # Quick start demo
+│   └── client_example.py              # API client example
+│
+├── 📂 tests/                          # Test suite
+│   ├── __init__.py
+│   ├── test_api.py                    # API endpoint tests
+│   └── test_nl2sql_agent.py           # Core functionality tests
+│
+├── 📂 scripts/                        # Utility scripts
+│   ├── deploy.sh                      # Deployment automation
+│   ├── run_tests.sh                   # Test runner
+│   └── setup_new_environment.py       # Environment setup
+│
+├── 📂 deployment/                     # Deployment configurations
+│   ├── docker/
+│   │   ├── Dockerfile                 # Container definition
+│   │   └── docker-compose.yml         # Multi-service orchestration
+│   ├── kubernetes/
+│   │   └── deployment.yaml            # K8s deployment config
+│   └── cloud/
+│       └── aws-ecs-task.json          # AWS ECS task definition
+│
+├── 📂 data/                           # Database files
+│   └── quickstart_sample.db           # Sample SQLite database
+│
+├── 📂 models/                         # Model cache (auto-created)
+├── 📂 logs/                           # Application logs (auto-created)
+└── 📂 nl2sql_env/                     # Virtual environment
 ```
 
-## 🛠️ Tech Stack
+## 🛠️ Quick Start
 
-| Component | Technology |
-|-----------|------------|
-| **Backend** | Python, FastAPI |
-| **Models** | Transformers, T5 (Spider fine-tuned) |
-| **Database** | SQLAlchemy (SQLite, PostgreSQL, MySQL) |
-| **SQL Processing** | SQLGlot for dialect transpilation |
-| **Frontend** | Streamlit with custom UI components |
-| **Visualization** | Plotly, Pandas |
-| **ML Framework** | PyTorch, Hugging Face Transformers |
-
-## 📦 Installation
-
-### Prerequisites
-- Python 3.8+
-- pip or conda
-- Git
-
-### Quick Setup
-
-1. **Clone the repository**
-```bash
-git clone <repository-url>
-cd NL_2_SQL
-```
-
-2. **Install dependencies**
-```bash
-pip install -r requirements.txt
-```
-
-3. **Run the demo**
-```bash
-python demo.py
-```
-
-4. **Launch the web interface**
-```bash
-streamlit run app.py
-```
-
-### Alternative Installation with Virtual Environment
+### 1. Clone and Setup
 
 ```bash
-# Create virtual environment
-python -m venv nl2sql_env
-source nl2sql_env/bin/activate  # On Windows: nl2sql_env\Scripts\activate
+# Clone repository
+git clone https://github.com/Srijan-Ratrey/Schema-Aware-Natural-Language-to-SQL-Agent.git
+cd Schema-Aware-Natural-Language-to-SQL-Agent
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-streamlit run app.py
+# Quick setup with deployment script
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh dev
 ```
 
-## 🚀 Usage
+### 2. Start the Web Interface
 
-### 1. Web Interface (Recommended)
-
-Launch the Streamlit application:
 ```bash
 streamlit run app.py
 ```
 
-1. **Connect to Database**: Use the sidebar to connect to your database
-2. **Load Model**: Select and load a pre-trained NL2SQL model
-3. **Ask Questions**: Enter natural language queries in the main interface
-4. **View Results**: See generated SQL, execution results, and visualizations
+### 3. Start the API Server
 
-### 2. Python API
+```bash
+python api.py
+```
+Access API documentation at: `http://localhost:8000/docs`
+
+## 🌐 API Quick Start
 
 ```python
-from src.nl2sql_agent import NL2SQLAgent
+import requests
 
-# Initialize agent
-agent = NL2SQLAgent()
+# API configuration
+API_BASE = "http://localhost:8000"
+API_KEY = "your-api-key-here"
+headers = {"Authorization": f"Bearer {API_KEY}"}
 
 # Connect to database
-agent.connect_database("sqlite", db_path="sample_database.db")
+requests.post(f"{API_BASE}/connect", 
+    json={"db_type": "sqlite", "db_path": "data/quickstart_sample.db"},
+    headers=headers
+)
 
-# Load model
-agent.load_model("tscholak/t5-base-spider")
+# Query database
+response = requests.post(f"{API_BASE}/query",
+    json={"query": "Show all books with rating above 4.5"},
+    headers=headers
+)
 
-# Query the database
-result = agent.query("Show all customers from New York")
-
-print(f"Generated SQL: {result['generated_sql']}")
-print(f"Results: {result['results']}")
+print(response.json())
 ```
 
-### 3. Command Line Demo
+## 🚀 Deployment Options
 
+### Development
 ```bash
-python demo.py
+./scripts/deploy.sh dev
 ```
 
-This runs a comprehensive demonstration including:
-- Schema extraction
-- Natural language query processing
-- SQL generation and execution
-- Advanced features showcase
-
-## 📊 Example Queries
-
-The system can handle various types of natural language queries:
-
-### Basic Queries
-- "Show all employees in the Engineering department"
-- "What are the top 5 most expensive products?"
-- "List all customers from California"
-
-### Aggregation Queries
-- "What is the average salary by department?"
-- "How many orders were placed last month?"
-- "What is the total revenue for 2023?"
-
-### Complex Queries
-- "Which customer has spent the most money?"
-- "Show employees hired after 2020 with salary > 50000"
-- "List projects with budget over 100k that are in progress"
-
-## 🎯 Model Options
-
-The system supports multiple pre-trained models:
-
-| Model | Description | Size | Performance |
-|-------|-------------|------|-------------|
-| `tscholak/t5-base-spider` | Original Spider fine-tuned T5 | 220M | High accuracy |
-| `gaussalgo/T5-LM-Large-text2sql-spider` | Large Spider model | 770M | Highest accuracy |
-| `t5-small` | Smaller T5 for fast inference | 60M | Good for testing |
-| `t5-base` | Base T5 for custom fine-tuning | 220M | Customizable |
-
-## 🗄️ Database Support
-
-### SQLite (Default)
-```python
-agent.connect_database("sqlite", db_path="database.db")
+### Docker
+```bash
+./scripts/deploy.sh docker
 ```
 
-### PostgreSQL
-```python
-agent.connect_database(
-    "postgresql",
-    host="localhost",
-    port=5432,
-    database="mydb",
-    user="username",
-    password="password"
-)
+### Docker Compose (Full Stack)
+```bash
+./scripts/deploy.sh compose
 ```
 
-### MySQL
-```python
-agent.connect_database(
-    "mysql",
-    host="localhost",
-    port=3306,
-    database="mydb",
-    user="username",
-    password="password"
-)
+### Kubernetes
+```bash
+kubectl apply -f deployment/kubernetes/deployment.yaml
 ```
 
-## 🔧 Configuration
-
-Create a `.env` file for custom configuration:
-
-```env
-# Model settings
-DEFAULT_MODEL=tscholak/t5-base-spider
-HUGGINGFACE_API_TOKEN=your_token_here
-
-# Database settings
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your_password
-
-# Logging
-LOG_LEVEL=INFO
-```
-
-## 📈 Performance & Evaluation
-
-### Metrics Tracked
-- **Exact Match (EM)**: Percentage of exactly matching SQL queries
-- **Execution Accuracy**: Percentage of queries that execute successfully
-- **Confidence Scores**: Model confidence in generated queries
-- **Response Time**: Average query processing time
-
-### Evaluation on Spider Dataset
-The models achieve competitive performance on the Spider benchmark:
-- **Execution Accuracy**: ~80% on Spider dev set
-- **Exact Match**: ~65% on Spider dev set
-
-## 🔄 Fine-tuning
-
-To fine-tune the model on your own data:
-
-```python
-from src.nl2sql_model import NL2SQLModel, SpiderDataProcessor
-
-# Load base model
-model = NL2SQLModel("t5-base")
-
-# Prepare your dataset
-dataset = SpiderDataProcessor.prepare_spider_dataset(
-    "your_data.json",
-    "your_tables.json", 
-    model.tokenizer
-)
-
-# Fine-tune
-model.fine_tune(
-    train_dataset=dataset,
-    output_dir="./custom_model",
-    num_epochs=5
-)
-```
+### Cloud Platforms
+- **AWS ECS**: Use `deployment/cloud/aws-ecs-task.json`
+- **Google Cloud Run**: Build with Docker and deploy
+- **Azure Container Instances**: Deploy with Docker image
+- **Heroku**: Deploy with git push
 
 ## 🧪 Testing
 
-Run the test suite:
 ```bash
-# Run demo with comprehensive testing
-python demo.py
+# Run comprehensive test suite
+./scripts/run_tests.sh
 
-# Test individual components
-python -m pytest tests/
+# Run specific tests
+python -m pytest tests/test_api.py -v
+python -m pytest tests/test_nl2sql_agent.py -v
 ```
 
-## 📁 Project Structure
+## 📊 Features Overview
 
-```
-NL_2_SQL/
-├── src/
-│   ├── __init__.py
-│   ├── nl2sql_agent.py          # Main orchestrator
-│   ├── nl2sql_model.py          # T5 model wrapper
-│   └── schema_retriever.py      # Database schema extraction
-├── app.py                       # Streamlit web interface
-├── demo.py                      # Comprehensive demo script
-├── config.py                    # Configuration settings
-├── requirements.txt             # Python dependencies
-└── README.md                    # Documentation
-```
+### Core Capabilities
+- ✅ Dynamic schema extraction and understanding
+- ✅ Fine-tuned T5 models (Spider dataset trained)
+- ✅ Multi-database support (SQLite, PostgreSQL, MySQL)
+- ✅ Real-time SQL generation and execution
+- ✅ Confidence scoring and query validation
+- ✅ Query history and analytics
+
+### Web Interface Features
+- ✅ Interactive Streamlit UI
+- ✅ Schema visualization
+- ✅ Query result visualization
+- ✅ Batch query processing
+- ✅ Export capabilities
+
+### API Features
+- ✅ RESTful API with OpenAPI documentation
+- ✅ Bearer token authentication
+- ✅ Rate limiting and security
+- ✅ Batch query processing
+- ✅ Health monitoring
+- ✅ Comprehensive error handling
+
+### Production Features
+- ✅ Docker containerization
+- ✅ Kubernetes deployment
+- ✅ Multi-cloud support
+- ✅ Logging and monitoring
+- ✅ Auto-scaling ready
+- ✅ Security best practices
+
+## 🛡️ Security Features
+
+- 🔐 API key authentication
+- 🛡️ SQL injection prevention
+- ✅ Query validation and sanitization
+- 🔒 Read-only query enforcement
+- 📊 Rate limiting and monitoring
+- 🔍 Comprehensive logging
+
+## 📈 Performance
+
+- ⚡ Optimized T5 model inference
+- 🚀 Async API endpoints
+- 💾 Schema caching
+- 📊 Query result caching
+- 🔄 Connection pooling
+- 📈 Horizontal scaling support
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Run tests: `./scripts/run_tests.sh`
+4. Commit changes: `git commit -m 'Add amazing feature'`
+5. Push to branch: `git push origin feature/amazing-feature`
+6. Open Pull Request
 
-## 🔗 Key Resources
+## 📚 Documentation
 
-- 📘 [Spider Dataset](https://yale-lily.github.io/spider) - Training data source
-- 🤖 [T5 Spider Model](https://huggingface.co/tscholak/t5-base-spider) - Pre-trained model
+- 📖 [Complete Setup Guide](docs/SETUP_COMPLETE.md)
+- 🔗 [API Documentation](docs/API_DOCUMENTATION.md)
+- 🐳 [Deployment Guide](scripts/deploy.sh)
+- 🧪 [Testing Guide](scripts/run_tests.sh)
+- 🔧 [Environment Setup](docs/ENVIRONMENT_SETUP.md)
+
+## 🔗 Related Resources
+
+- 📘 [Spider Dataset](https://yale-lily.github.io/spider) - Training data
+- 🤖 [Hugging Face Models](https://huggingface.co/models?search=text2sql) - Pre-trained models
 - ⚙️ [SQLGlot](https://github.com/tobymao/sqlglot) - SQL transpilation
-- 📚 [NL2SQL Handbook](https://github.com/HKUSTDial/NL2SQL_Handbook) - Research reference
+- 📚 [NL2SQL Papers](https://github.com/HKUSTDial/NL2SQL_Handbook) - Research
 
+## 📄 License
 
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Model Loading Errors**
-   - Ensure you have sufficient memory (4GB+ recommended)
-   - Try using smaller models like `t5-small` for testing
-
-2. **Database Connection Issues**
-   - Verify database credentials and network connectivity
-   - Check firewall settings for remote databases
-
-3. **Query Generation Problems**
-   - Ensure database schema is properly extracted
-   - Try rephrasing questions more clearly
-   - Check if tables/columns exist in the database
-
-### Getting Help
-- Check the demo script output for detailed error messages
-- Review logs in `nl2sql_agent.log`
-- Open an issue on GitHub with error details
-
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- **Spider Dataset Team** at Yale University for the high-quality NL2SQL dataset
-- **Hugging Face** for providing pre-trained models and infrastructure
-- **SQLAlchemy** and **SQLGlot** teams for excellent SQL handling libraries
-- **Streamlit** for enabling rapid web application development
+- **Spider Dataset Team** for high-quality NL2SQL benchmarks
+- **Hugging Face** for transformer models and infrastructure
+- **FastAPI & Streamlit** teams for excellent frameworks
+- **SQLAlchemy & SQLGlot** for robust SQL handling
 
 ---
 
-> **"Talk to your data as you talk to a human."**  
-> Making databases accessible, one query at a time. 🚀
+**🌟 Star this repo if you find it useful!**
+
+> "Making databases conversational, one query at a time." 🚀 

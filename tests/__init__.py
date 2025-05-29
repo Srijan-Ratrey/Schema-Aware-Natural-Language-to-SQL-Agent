@@ -1,0 +1,1 @@
+# Tests package for Schema-Aware NL2SQL 
