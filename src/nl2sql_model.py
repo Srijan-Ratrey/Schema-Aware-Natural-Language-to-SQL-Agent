@@ -18,6 +18,14 @@ import sqlglot
 from sqlglot import transpile
 import re
 
+# Check for sentencepiece dependency
+try:
+    import sentencepiece
+    SENTENCEPIECE_AVAILABLE = True
+except ImportError:
+    SENTENCEPIECE_AVAILABLE = False
+    logging.warning("SentencePiece not found. T5 models may not work properly.")
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -37,6 +45,13 @@ class NL2SQLModel:
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         
         logger.info(f"Loading model {model_name} on {self.device}")
+        
+        # Check if sentencepiece is available for T5 models
+        if not SENTENCEPIECE_AVAILABLE:
+            raise ImportError(
+                "SentencePiece library is required for T5 models. "
+                "Please install it with: pip install sentencepiece==0.1.99"
+            )
         
         # Load tokenizer and model
         self.tokenizer = T5Tokenizer.from_pretrained(model_name)
