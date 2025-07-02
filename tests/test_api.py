@@ -21,6 +21,11 @@ class TestNL2SQLAPI:
         self.api_key = "test-api-key-123"
         self.headers = {"Authorization": f"Bearer {self.api_key}"}
     
+    def teardown_method(self):
+        """Reset global agent state after each test"""
+        import api
+        api.nl2sql_agent = None
+    
     def test_root_endpoint(self):
         """Test root endpoint"""
         response = self.client.get("/")
@@ -199,8 +204,17 @@ class TestNL2SQLAPI:
         assert data["success"] is True
         assert "statistics" in data
     
-    def test_service_unavailable(self):
+    @patch('api.get_agent')
+    def test_service_unavailable(self, mock_get_agent):
         """Test service unavailable when agent not initialized"""
+        # Mock get_agent to raise HTTPException with 503
+        from fastapi import HTTPException
+        from fastapi import status
+        mock_get_agent.side_effect = HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="NL2SQL agent not initialized. Please connect to a database first."
+        )
+        
         # This should fail because no agent is initialized
         query_request = {
             "query": "Show all books",

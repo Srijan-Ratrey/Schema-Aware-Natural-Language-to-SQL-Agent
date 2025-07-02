@@ -50,6 +50,8 @@ class QueryRequest(BaseModel):
     query: str = Field(..., description="Natural language question", min_length=1)
     execute: bool = Field(True, description="Whether to execute the generated SQL")
     include_schema: bool = Field(False, description="Include schema information in response")
+    use_few_shot: bool = Field(False, description="Use few-shot learning for complex queries")
+    use_enhanced_prompts: bool = Field(True, description="Use enhanced prompt engineering")
 
 class BatchQueryRequest(BaseModel):
     """Batch query request"""
@@ -290,7 +292,12 @@ async def process_query(
     background_tasks.add_task(increment_request_count)
     
     try:
-        result = agent.process_query(request.query)
+        # Use enhanced prompt engineering if requested
+        if request.use_enhanced_prompts and agent.prompt_engineer:
+            result = agent.process_query(request.query, use_few_shot=request.use_few_shot)
+        else:
+            # Fallback to basic processing
+            result = agent.process_query(request.query)
         
         # Add schema info if requested
         schema_info = None
@@ -308,6 +315,9 @@ async def process_query(
             schema_info=schema_info
         )
         
+    except HTTPException:
+        # Re-raise HTTPExceptions to preserve status codes
+        raise
     except Exception as e:
         logger.error(f"Query processing error: {e}")
         raise HTTPException(

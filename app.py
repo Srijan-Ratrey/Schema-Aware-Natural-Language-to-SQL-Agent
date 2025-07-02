@@ -175,86 +175,229 @@ def create_sample_database():
 
 
 def sidebar_database_connection():
-    """Sidebar for database connection settings"""
+    """Database connection sidebar"""
     st.sidebar.header("🗄️ Database Connection")
     
     db_type = st.sidebar.selectbox(
-        "Database Type",
-        ["SQLite", "PostgreSQL", "MySQL"],
-        help="Select your database type"
+        "Database Type:",
+        ["sqlite", "postgresql", "mysql"],
+        help="Choose your database type"
     )
     
-    if db_type == "SQLite":
-        use_sample = st.sidebar.checkbox("Use Sample Database", value=True)
-        
-        if use_sample:
-            db_path = create_sample_database()
-            st.sidebar.success("Sample database created!")
-        else:
-            db_path = st.sidebar.text_input("Database Path", value="database.db")
-        
-        if st.sidebar.button("Connect to Database"):
-            try:
-                if not st.session_state.agent:
-                    st.session_state.agent = NL2SQLAgent()
-                
-                success = st.session_state.agent.connect_database("sqlite", db_path=db_path)
-                if success:
-                    st.session_state.connected = True
-                    st.sidebar.success("✅ Connected to database!")
-                else:
-                    st.sidebar.error("❌ Failed to connect to database")
-            except Exception as e:
-                st.sidebar.error(f"❌ Connection error: {str(e)}")
+    # Sample database option
+    use_sample = st.sidebar.checkbox("Use Sample Database", value=True, help="Use built-in sample database for testing")
     
-    elif db_type == "PostgreSQL":
-        host = st.sidebar.text_input("Host", value="localhost")
-        port = st.sidebar.number_input("Port", value=5432)
-        database = st.sidebar.text_input("Database", value="postgres")
-        user = st.sidebar.text_input("User", value="postgres")
-        password = st.sidebar.text_input("Password", type="password")
-        
-        if st.sidebar.button("Connect to Database"):
-            try:
-                if not st.session_state.agent:
-                    st.session_state.agent = NL2SQLAgent()
-                
-                success = st.session_state.agent.connect_database(
-                    "postgresql",
-                    host=host,
-                    port=port,
-                    database=database,
-                    user=user,
-                    password=password
-                )
-                if success:
-                    st.session_state.connected = True
-                    st.sidebar.success("✅ Connected to database!")
+    if use_sample:
+        if db_type == "sqlite":
+            # Sample database selection
+            sample_db = st.sidebar.selectbox(
+                "Select Sample Database:",
+                ["sample_database.db", "sample_ecommerce.db", "demo_company.db"],
+                help="Choose between different sample databases"
+            )
+            
+            # Show database description
+            if sample_db == "sample_database.db":
+                st.sidebar.info("📊 Working Database: Customer, Product, Supplier, Order, OrderItem")
+            elif sample_db == "sample_ecommerce.db":
+                st.sidebar.info("📊 E-commerce Database: customers, products, orders, order_items")
+            else:
+                st.sidebar.info("🏢 Company Database: employees, departments, projects")
+            
+            # Check if sample database exists
+            if sample_db == "sample_database.db":
+                db_path = "data/sample_database.db"
+                if os.path.exists(db_path):
+                    st.sidebar.success(f"✅ {sample_db} found!")
                 else:
-                    st.sidebar.error("❌ Failed to connect to database")
-            except Exception as e:
-                st.sidebar.error(f"❌ Connection error: {str(e)}")
+                    st.sidebar.error(f"Sample database {sample_db} not found")
+                    return
+            elif sample_db == "sample_ecommerce.db":
+                if not os.path.exists(sample_db):
+                    create_sample_database()
+                st.sidebar.success(f"✅ {sample_db} found!")
+            else:
+                if not os.path.exists(sample_db):
+                    st.sidebar.error(f"Sample database {sample_db} not found")
+                    return
+                else:
+                    st.sidebar.success(f"✅ {sample_db} found!")
+            
+            # Connect to the sample database
+            if st.sidebar.button("Connect to Sample Database"):
+                try:
+                    if not st.session_state.agent:
+                        st.session_state.agent = NL2SQLAgent()
+                    
+                    # Use the correct database path
+                    if sample_db == "sample_database.db":
+                        db_path = "data/sample_database.db"  # Use our working database
+                    elif sample_db == "sample_ecommerce.db":
+                        db_path = sample_db
+                    else:
+                        db_path = sample_db
+                    
+                    success = st.session_state.agent.connect_database("sqlite", database_path=db_path)
+                    if success:
+                        st.session_state.connected = True
+                        st.sidebar.success("✅ Connected to sample database!")
+                    else:
+                        st.sidebar.error("❌ Failed to connect to sample database")
+                except Exception as e:
+                    st.sidebar.error(f"❌ Connection error: {str(e)}")
+        else:
+            st.sidebar.warning("Sample databases only available for SQLite")
+            return
+    else:
+        # Custom database connection
+        st.sidebar.subheader("📁 Custom Database")
+        
+        if db_type == "sqlite":
+            db_path = st.sidebar.text_input(
+                "Database File Path:", 
+                value="your_database.db",
+                help="Path to your SQLite database file (e.g., /path/to/your/database.db)"
+            )
+            
+            if st.sidebar.button("Connect to Database"):
+                if os.path.exists(db_path):
+                    if not st.session_state.agent:
+                        st.session_state.agent = NL2SQLAgent()
+                    
+                    success = st.session_state.agent.connect_database("sqlite", database_path=db_path)
+                    if success:
+                        st.session_state.connected = True
+                        st.sidebar.success("✅ Connected to database!")
+                    else:
+                        st.sidebar.error("❌ Failed to connect to database")
+                else:
+                    st.sidebar.error(f"❌ Database file not found: {db_path}")
+        
+        elif db_type == "postgresql":
+            col1, col2 = st.columns(2)
+            with col1:
+                host = st.text_input("Host", value="localhost")
+                port = st.number_input("Port", value=5432)
+                database = st.text_input("Database", value="your_database")
+            with col2:
+                user = st.text_input("User", value="postgres")
+                password = st.text_input("Password", type="password")
+            
+            if st.button("Connect to Database"):
+                try:
+                    success = st.session_state.agent.connect_database(
+                        "postgresql",
+                        host=host,
+                        port=port,
+                        database=database,
+                        user=user,
+                        password=password
+                    )
+                    if success:
+                        st.session_state.connected = True
+                        st.sidebar.success("✅ Connected to database!")
+                    else:
+                        st.sidebar.error("❌ Failed to connect to database")
+                except Exception as e:
+                    st.sidebar.error(f"❌ Connection error: {str(e)}")
+        
+        elif db_type == "mysql":
+            col1, col2 = st.columns(2)
+            with col1:
+                host = st.text_input("Host", value="localhost")
+                port = st.number_input("Port", value=3306)
+                database = st.text_input("Database", value="your_database")
+            with col2:
+                user = st.text_input("User", value="root")
+                password = st.text_input("Password", type="password")
+            
+            if st.button("Connect to Database"):
+                try:
+                    success = st.session_state.agent.connect_database(
+                        "mysql",
+                        host=host,
+                        port=port,
+                        database=database,
+                        user=user,
+                        password=password
+                    )
+                    if success:
+                        st.session_state.connected = True
+                        st.sidebar.success("✅ Connected to database!")
+                    else:
+                        st.sidebar.error("❌ Failed to connect to database")
+                except Exception as e:
+                    st.sidebar.error(f"❌ Connection error: {str(e)}")
+    
+    # Database connection instructions
+    with st.sidebar.expander("📖 How to Connect Your Database"):
+        st.markdown("""
+        **SQLite Database:**
+        1. Place your `.db` file in the project directory
+        2. Enter the filename (e.g., `my_database.db`)
+        3. Click "Connect to Database"
+        
+        **PostgreSQL Database:**
+        1. Ensure PostgreSQL server is running
+        2. Enter your connection details
+        3. Make sure the database exists
+        4. Click "Connect to Database"
+        
+        **MySQL Database:**
+        1. Ensure MySQL server is running
+        2. Enter your connection details
+        3. Make sure the database exists
+        4. Click "Connect to Database"
+        
+        **Supported Database Formats:**
+        - SQLite (.db files)
+        - PostgreSQL (server connection)
+        - MySQL (server connection)
+        """)
     
     # Model loading section
     st.sidebar.header("🤖 Model Configuration")
     
     model_name = st.sidebar.selectbox(
-        "Select Model",
+        "Select Model:",
         [
-            "tscholak/t5-base-spider",
-            "gaussalgo/T5-LM-Large-text2sql-spider",
-            "t5-small",
-            "t5-base"
+            "gaussalgo/T5-LM-Large-text2sql-spider"
         ],
-        help="Choose the NL2SQL model to use"
+        index=0
     )
+    
+    # Enhanced prompt engineering options
+    st.sidebar.subheader("🧠 Prompt Engineering")
+    
+    use_enhanced_prompts = st.sidebar.checkbox(
+        "Use Enhanced Prompts", 
+        value=st.session_state.get('use_enhanced_prompts', True),
+        help="Use advanced prompt engineering for better SQL generation"
+    )
+    
+    use_few_shot = st.sidebar.checkbox(
+        "Use Few-Shot Learning", 
+        value=st.session_state.get('use_few_shot', False),
+        help="Use few-shot learning for complex queries (slower but more accurate)"
+    )
+    
+    auto_error_correction = st.sidebar.checkbox(
+        "Auto Error Correction", 
+        value=st.session_state.get('auto_error_correction', True),
+        help="Automatically attempt to correct failed SQL queries"
+    )
+    
+    # Store settings in session state
+    st.session_state.use_enhanced_prompts = use_enhanced_prompts
+    st.session_state.use_few_shot = use_few_shot
+    st.session_state.auto_error_correction = auto_error_correction
     
     if st.sidebar.button("Load Model"):
         try:
             if not st.session_state.agent:
                 st.session_state.agent = NL2SQLAgent()
             
-            with st.sidebar.spinner("Loading model..."):
+            with st.spinner("Loading model..."):
                 success = st.session_state.agent.load_model(model_name)
                 if success:
                     st.session_state.model_loaded = True
@@ -263,6 +406,7 @@ def sidebar_database_connection():
                     st.sidebar.error("❌ Failed to load model")
         except Exception as e:
             st.sidebar.error(f"❌ Model loading error: {str(e)}")
+            st.sidebar.error("Make sure you have activated the virtual environment: source nl2sql_env/bin/activate")
     
     # Connection status
     st.sidebar.header("📊 Status")
@@ -301,14 +445,14 @@ def main_interface():
     
     # Predefined example queries
     example_queries = [
-        "Show all customers from the USA",
-        "What are the top 5 most expensive products?",
-        "How many orders were placed in June 2023?",
-        "Which customer has spent the most money?",
-        "What is the average order value?",
-        "Show all products in the Electronics category",
-        "List orders with status 'Completed'",
-        "What is the total revenue?"
+        "Show all records from the first table",
+        "What is the total count of records?",
+        "Show the top 5 records",
+        "What are the unique values in the first column?",
+        "Show records ordered by the first column",
+        "What is the average value of numeric columns?",
+        "Show records where the first column is not null",
+        "What is the maximum value in numeric columns?"
     ]
     
     selected_example = st.selectbox(
@@ -327,23 +471,31 @@ def main_interface():
     # Query options
     col1, col2, col3 = st.columns(3)
     with col1:
-        execute_query = st.checkbox("Execute SQL", value=True)
+        execute_query = st.checkbox("Auto-Execute Generated SQL", value=True, help="Automatically execute the SQL generated by the model")
     with col2:
-        show_sql = st.checkbox("Show Generated SQL", value=True)
+        show_sql = st.checkbox("Show Generated SQL", value=True, help="Display the SQL generated by the model")
     with col3:
-        validate_only = st.checkbox("Validate Only", value=False)
+        validate_only = st.checkbox("Validate Only (No Execution)", value=False, help="Only validate SQL without executing it")
     
     # Query button
     if st.button("🔍 Process Query", type="primary"):
         if query_input.strip():
             with st.spinner("Processing your question..."):
                 try:
-                    result = st.session_state.agent.query(
-                        natural_language_query=query_input,
-                        execute=execute_query,
-                        return_sql=show_sql,
-                        validate_only=validate_only
-                    )
+                    # Get prompt engineering settings from session state
+                    use_enhanced_prompts = st.session_state.get('use_enhanced_prompts', True)
+                    use_few_shot = st.session_state.get('use_few_shot', False)
+                    
+                    # Process the query with enhanced prompts if available
+                    if use_enhanced_prompts and hasattr(st.session_state.agent, 'prompt_engineer'):
+                        result = st.session_state.agent.process_query(query_input, use_few_shot=use_few_shot)
+                    else:
+                        result = st.session_state.agent.process_query(query_input)
+                    
+                    # If validate_only is checked, modify the result to not show execution
+                    if validate_only and result.get("success"):
+                        result["executed"] = False
+                        result["execution_message"] = "SQL validation only - not executed"
                     
                     # Store in history
                     st.session_state.query_history.append({
@@ -359,6 +511,29 @@ def main_interface():
         else:
             st.warning("Please enter a question!")
 
+    # --- Raw SQL Execution Section ---
+    st.header("📝 Run Raw SQL Query ")
+    with st.expander("Run SQL directly on your connected database"):
+        sql_query = st.text_area("Enter your SQL query here", height=100, key="raw_sql_input")
+        if st.button("Execute SQL", key="execute_raw_sql"):
+            if not st.session_state.connected:
+                st.error("Please connect to a database first!")
+            elif not sql_query.strip():
+                st.warning("Please enter a SQL query.")
+            else:
+                try:
+                    result = st.session_state.agent.execute_sql(sql_query)
+                    if result.get("success"):
+                        st.success("✅ SQL executed successfully!")
+                        if result.get("results"):
+                            st.dataframe(pd.DataFrame(result["results"]))
+                        else:
+                            st.info("Query executed but returned no results.")
+                    else:
+                        st.error(f"❌ {result.get('error', 'Unknown error')}")
+                except Exception as e:
+                    st.error(f"Error executing SQL: {str(e)}")
+
 
 def display_query_result(result: Dict[str, Any]):
     """Display the result of a query"""
@@ -370,43 +545,59 @@ def display_query_result(result: Dict[str, Any]):
         with col1:
             st.metric("Confidence Score", f"{result.get('confidence_score', 0):.2f}")
         with col2:
-            st.metric("Execution Time", f"{result.get('execution_time', 0):.3f}s")
+            st.metric("Processing Time", f"{result.get('processing_time', 0):.3f}s")
         with col3:
-            validity = "Valid" if result.get('sql_valid', False) else "Invalid"
-            st.metric("SQL Validity", validity)
+            # Check if results were returned (indicating execution)
+            has_results = bool(result.get("results") or result.get("results_df") is not None)
+            execution_status = "Executed" if has_results else "Not Executed"
+            st.metric("Execution Status", execution_status)
         
         # Show generated SQL
         if "generated_sql" in result:
             st.subheader("🔧 Generated SQL")
             st.code(result["generated_sql"], language="sql")
-        
-        # Show validation message
-        if result.get("validation_message"):
-            if result.get('sql_valid'):
-                st.success(f"✅ {result['validation_message']}")
-            else:
-                st.error(f"❌ {result['validation_message']}")
+            
+            # Add execute button if SQL was generated but no results returned
+            if not result.get("results") and not result.get("results_df") is not None:
+                if st.button("🚀 Execute This SQL", key=f"execute_generated_{hash(result['generated_sql'])}"):
+                    try:
+                        sql_result = st.session_state.agent.execute_sql(result["generated_sql"])
+                        if sql_result.get("success"):
+                            st.success("✅ SQL executed successfully!")
+                            if sql_result.get("results"):
+                                st.subheader("📊 Execution Results")
+                                st.dataframe(pd.DataFrame(sql_result["results"]), use_container_width=True)
+                                st.info(f"📈 Returned {sql_result.get('row_count', 0)} rows")
+                            else:
+                                st.info("Query executed but returned no results.")
+                        else:
+                            st.error(f"❌ Execution failed: {sql_result.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"Error executing SQL: {str(e)}")
         
         # Show results
-        if result.get("executed") and result.get("results"):
+        if result.get("results") or result.get("results_df") is not None:
             st.subheader("📊 Query Results")
             
-            results_df = pd.DataFrame(result["results"])
+            # Use results_df if available, otherwise convert results to DataFrame
+            if result.get("results_df") is not None:
+                results_df = result["results_df"]
+            else:
+                results_df = pd.DataFrame(result["results"])
+            
             st.dataframe(results_df, use_container_width=True)
             
             # Show result summary
-            st.info(f"📈 Returned {result.get('num_results', 0)} rows")
+            row_count = result.get("row_count", len(results_df))
+            st.info(f"📈 Returned {row_count} rows")
             
             # Offer data visualization for numeric data
             if len(results_df) > 0 and len(results_df.select_dtypes(include=['number']).columns) > 0:
-                if st.button("📊 Create Visualization"):
+                if st.button("📊 Create Visualization", key=f"viz_{hash(str(results_df))}"):
                     create_visualization(results_df)
         
-        elif result.get("executed") and not result.get("results"):
-            st.info("Query executed successfully but returned no results.")
-        
-        elif not result.get("executed") and result.get("execution_error"):
-            st.error(f"Execution failed: {result['execution_error']}")
+        elif not result.get("results") and not result.get("results_df") is not None:
+            st.info("SQL generated but not executed. Use the 'Execute This SQL' button above to run it.")
     
     else:
         st.markdown(f'<div class="error-box">❌ {result.get("error", "Unknown error")}</div>', unsafe_allow_html=True)
@@ -537,8 +728,9 @@ def query_history():
                 st.success("✅ Successful")
                 if 'generated_sql' in result:
                     st.code(result['generated_sql'], language='sql')
-                if result.get('executed') and result.get('num_results'):
-                    st.write(f"**Results:** {result['num_results']} rows")
+                if result.get('results') or result.get('results_df') is not None:
+                    row_count = result.get('row_count', 0)
+                    st.write(f"**Results:** {row_count} rows")
             else:
                 st.error(f"❌ Failed: {result.get('error')}")
     

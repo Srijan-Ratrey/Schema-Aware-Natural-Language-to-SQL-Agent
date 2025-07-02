@@ -4,6 +4,10 @@ Configuration settings for Schema-Aware NL2SQL Agent
 
 import os
 from typing import Dict, Any
+from pathlib import Path
+
+# Project root directory
+PROJECT_ROOT = Path(__file__).parent
 
 # Model Configuration
 DEFAULT_MODEL = "mrm8488/t5-base-finetuned-wikiSQL"
@@ -16,9 +20,10 @@ ALTERNATIVE_MODELS = [
 ]
 
 # Database Configuration
-DEFAULT_DB_CONFIG = {
-    "sqlite": {
-        "db_path": "database.db"
+DATABASE_CONFIG = {
+    'sqlite': {
+        'database_path': PROJECT_ROOT / 'data' / 'sample_database.db',
+        'connection_string': f"sqlite:///{PROJECT_ROOT / 'data' / 'sample_database.db'}"
     },
     "postgresql": {
         "host": "localhost",
@@ -35,6 +40,18 @@ DEFAULT_DB_CONFIG = {
         "password": ""
     }
 }
+
+# Default database type
+DEFAULT_DATABASE_TYPE = 'sqlite'
+
+# API configuration
+API_HOST = os.getenv('API_HOST', '0.0.0.0')
+API_PORT = int(os.getenv('API_PORT', 8000))
+API_DEBUG = os.getenv('API_DEBUG', 'True').lower() == 'true'
+
+# Logging configuration
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+LOG_FILE = PROJECT_ROOT / 'logs' / 'nl2sql.log'
 
 # Model Generation Parameters
 GENERATION_CONFIG = {
@@ -90,6 +107,72 @@ SECURITY_CONFIG = {
     ]
 }
 
+# Database schema information for NL2SQL
+DATABASE_SCHEMA = {
+    'tables': {
+        'Customer': {
+            'description': 'Customer information including personal details and contact information',
+            'columns': {
+                'Id': 'Primary key, unique customer identifier',
+                'FirstName': 'Customer first name',
+                'LastName': 'Customer last name', 
+                'City': 'City where customer is located',
+                'Country': 'Country where customer is located',
+                'Phone': 'Customer phone number'
+            }
+        },
+        'Supplier': {
+            'description': 'Supplier information for products',
+            'columns': {
+                'Id': 'Primary key, unique supplier identifier',
+                'CompanyName': 'Name of the supplier company',
+                'ContactName': 'Contact person name',
+                'City': 'City where supplier is located',
+                'Country': 'Country where supplier is located',
+                'Phone': 'Supplier phone number',
+                'Fax': 'Supplier fax number'
+            }
+        },
+        'Product': {
+            'description': 'Product catalog with pricing and supplier information',
+            'columns': {
+                'Id': 'Primary key, unique product identifier',
+                'ProductName': 'Name of the product',
+                'SupplierId': 'Foreign key to Supplier table',
+                'UnitPrice': 'Price per unit of the product',
+                'Package': 'Product packaging description',
+                'IsDiscontinued': 'Boolean indicating if product is discontinued'
+            }
+        },
+        'Order': {
+            'description': 'Customer orders with order details',
+            'columns': {
+                'Id': 'Primary key, unique order identifier',
+                'OrderDate': 'Date when order was placed',
+                'OrderNumber': 'Order reference number',
+                'CustomerId': 'Foreign key to Customer table',
+                'TotalAmount': 'Total amount for the order'
+            }
+        },
+        'OrderItem': {
+            'description': 'Individual items within orders linking products to orders',
+            'columns': {
+                'Id': 'Primary key, unique order item identifier',
+                'OrderId': 'Foreign key to Order table',
+                'ProductId': 'Foreign key to Product table',
+                'UnitPrice': 'Price per unit at time of order',
+                'Quantity': 'Quantity of product ordered'
+            }
+        }
+    },
+    'relationships': [
+        'Product.SupplierId -> Supplier.Id',
+        'Order.CustomerId -> Customer.Id', 
+        'OrderItem.OrderId -> Order.Id',
+        'OrderItem.ProductId -> Product.Id'
+    ]
+}
+
 def get_env_config() -> Dict[str, Any]:
     """Get configuration from environment variables"""
     return {
@@ -106,5 +189,9 @@ def get_env_config() -> Dict[str, Any]:
         "mysql_port": int(os.getenv("MYSQL_PORT", 3306)),
         "mysql_db": os.getenv("MYSQL_DB", "mysql"),
         "mysql_user": os.getenv("MYSQL_USER", "root"),
-        "mysql_password": os.getenv("MYSQL_PASSWORD", "")
+        "mysql_password": os.getenv("MYSQL_PASSWORD", ""),
+        "api_host": API_HOST,
+        "api_port": API_PORT,
+        "api_debug": API_DEBUG,
+        "log_file": LOG_FILE
     } 

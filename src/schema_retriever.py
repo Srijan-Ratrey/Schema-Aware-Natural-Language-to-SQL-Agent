@@ -143,6 +143,11 @@ class SchemaRetriever:
             ""
         ]
         
+        # Add explicit table names list at the beginning
+        table_names = list(schema["tables"].keys())
+        prompt_parts.append(f"IMPORTANT: Use these exact table names: {', '.join(table_names)}")
+        prompt_parts.append("")
+        
         # Add table information
         for table_name, table_info in schema["tables"].items():
             prompt_parts.append(f"Table: {table_name}")
@@ -173,29 +178,54 @@ class SchemaRetriever:
                 prompt_parts.append(rel_desc)
             prompt_parts.append("")
         
+        # Add final reminder about table names
+        prompt_parts.append(f"REMEMBER: Use exact table names: {', '.join(table_names)}")
+        
         return "\n".join(prompt_parts)
     
     def get_simple_schema_prompt(self) -> str:
         """
-        Generate a simplified schema prompt optimized for WikiSQL models
+        Generate a simplified schema prompt optimized for T5-based models
         """
         schema = self.get_database_schema()
         
-        # For single table databases, keep it simple
+        # Start with explicit table names
+        table_names = list(schema["tables"].keys())
+        prompt_parts = [f"Available tables: {', '.join(table_names)}"]
+        prompt_parts.append("")
+        
+        # For single table databases, provide detailed column info
         if len(schema["tables"]) == 1:
             table_name, table_info = next(iter(schema["tables"].items()))
             
-            # Just list column names - WikiSQL models work better with simpler input
-            columns = [col['name'] for col in table_info["columns"]]
-            return f"Table {table_name} has columns: {', '.join(columns)}"
+            # Provide detailed column information
+            columns_info = []
+            for col in table_info["columns"]:
+                col_info = f"{col['name']} ({col['type']})"
+                if col['primary_key']:
+                    col_info += " [PK]"
+                columns_info.append(col_info)
+            
+            prompt_parts.append(f"Table '{table_name}' has columns: {', '.join(columns_info)}")
         
-        # For multi-table, still keep it simple
-        prompt_parts = []
-        for table_name, table_info in schema["tables"].items():
-            columns = [col['name'] for col in table_info["columns"]]
-            prompt_parts.append(f"Table {table_name}: {', '.join(columns)}")
+        # For multi-table, provide table names and key columns
+        else:
+            for table_name, table_info in schema["tables"].items():
+                # Get primary key columns
+                pk_columns = [col['name'] for col in table_info["columns"] if col['primary_key']]
+                # Get a few key columns (first 3-4)
+                key_columns = [col['name'] for col in table_info["columns"][:4]]
+                
+                table_info_str = f"Table '{table_name}': {', '.join(key_columns)}"
+                if pk_columns:
+                    table_info_str += f" (PK: {', '.join(pk_columns)})"
+                prompt_parts.append(table_info_str)
         
-        return " | ".join(prompt_parts)
+        # Add important note about table names
+        prompt_parts.append("")
+        prompt_parts.append("IMPORTANT: Use exact table names as shown above. Do not use singular/plural variations.")
+        
+        return "\n".join(prompt_parts)
     
     def execute_query(self, sql_query: str) -> pd.DataFrame:
         """
@@ -319,7 +349,7 @@ def create_schema_retriever(db_type: str, **kwargs) -> SchemaRetriever:
         SchemaRetriever instance
     """
     if db_type.lower() == 'sqlite':
-        db_path = kwargs.get('db_path', 'database.db')
+        db_path = kwargs.get('database_path', kwargs.get('db_path', 'database.db'))
         connection_string = f"sqlite:///{db_path}"
     
     elif db_type.lower() == 'postgresql':

@@ -171,22 +171,18 @@ def demo_nl2sql_queries(db_path):
         print("-" * 40)
         
         try:
-            result = agent.query(
-                natural_language_query=query,
-                execute=True,
-                return_sql=True
-            )
+            result = agent.process_query(query)
             
             if result.get("success"):
                 print(f"✅ Success (Confidence: {result.get('confidence_score', 0):.2f})")
                 print(f"Generated SQL: {result.get('generated_sql')}")
                 
-                if result.get('executed') and result.get('results'):
+                if result.get('results'):
                     df = pd.DataFrame(result['results'])
                     print(f"Results ({len(df)} rows):")
                     print(df.to_string(index=False))
-                elif result.get('execution_error'):
-                    print(f"❌ Execution Error: {result['execution_error']}")
+                else:
+                    print("No results returned")
             else:
                 print(f"❌ Failed: {result.get('error')}")
         

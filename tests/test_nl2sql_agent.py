@@ -72,23 +72,23 @@ class TestNL2SQLAgent:
         success = self.agent.connect_database("invalid_db_type")
         assert success is False
     
-    @patch('src.nl2sql_agent.NL2SQLModel')
-    def test_load_model(self, mock_model_class):
+    @patch('src.nl2sql_agent.load_model')
+    def test_load_model(self, mock_load_model):
         """Test model loading"""
         # Mock model
         mock_model = Mock()
-        mock_model_class.return_value = mock_model
+        mock_load_model.return_value = mock_model
         
         success = self.agent.load_model("test-model")
         
         assert success is True
         assert self.agent.model is not None
-        mock_model_class.assert_called_once_with("test-model")
+        mock_load_model.assert_called_once_with("test-model")
     
-    @patch('src.nl2sql_agent.NL2SQLModel')
-    def test_load_model_failure(self, mock_model_class):
+    @patch('src.nl2sql_agent.load_model')
+    def test_load_model_failure(self, mock_load_model):
         """Test model loading failure"""
-        mock_model_class.side_effect = Exception("Model load failed")
+        mock_load_model.side_effect = Exception("Model load failed")
         
         success = self.agent.load_model("invalid-model")
         assert success is False
@@ -100,8 +100,8 @@ class TestNL2SQLAgent:
         assert result["success"] is False
         assert "error" in result
     
-    @patch('src.nl2sql_agent.NL2SQLModel')
-    def test_process_query_with_setup(self, mock_model_class):
+    @patch('src.nl2sql_agent.load_model')
+    def test_process_query_with_setup(self, mock_load_model):
         """Test query processing with proper setup"""
         # Setup database
         self.agent.connect_database("sqlite", db_path=self.temp_db_path)
@@ -109,10 +109,10 @@ class TestNL2SQLAgent:
         # Mock model
         mock_model = Mock()
         mock_model.generate_sql.return_value = {
-            "sql": "SELECT * FROM books;",
-            "confidence": 0.85
+            "sql_query": "SELECT * FROM books;",
+            "confidence_score": 0.85
         }
-        mock_model_class.return_value = mock_model
+        mock_load_model.return_value = mock_model
         self.agent.load_model("test-model")
         
         # Process query
