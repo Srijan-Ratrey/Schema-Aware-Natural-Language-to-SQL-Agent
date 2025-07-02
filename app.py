@@ -206,11 +206,24 @@ def sidebar_database_connection():
             
             # Check if sample database exists
             if sample_db == "sample_database.db":
-                db_path = "data/sample_database.db"
-                if os.path.exists(db_path):
-                    st.sidebar.success(f"✅ {sample_db} found!")
+                # Try multiple possible paths
+                possible_paths = [
+                    "data/sample_database.db",
+                    "./data/sample_database.db",
+                    os.path.join(os.getcwd(), "data", "sample_database.db"),
+                    os.path.join(os.path.dirname(__file__), "data", "sample_database.db")
+                ]
+                
+                db_path = None
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        db_path = path
+                        break
+                
+                if db_path:
+                    st.sidebar.success(f"✅ {sample_db} found at {db_path}!")
                 else:
-                    st.sidebar.error(f"Sample database {sample_db} not found")
+                    st.sidebar.error(f"Sample database {sample_db} not found. Tried paths: {possible_paths}")
                     return
             elif sample_db == "sample_ecommerce.db":
                 if not os.path.exists(sample_db):
@@ -231,7 +244,23 @@ def sidebar_database_connection():
                     
                     # Use the correct database path
                     if sample_db == "sample_database.db":
-                        db_path = "data/sample_database.db"  # Use our working database
+                        # Use the path we found earlier
+                        possible_paths = [
+                            "data/sample_database.db",
+                            "./data/sample_database.db",
+                            os.path.join(os.getcwd(), "data", "sample_database.db"),
+                            os.path.join(os.path.dirname(__file__), "data", "sample_database.db")
+                        ]
+                        
+                        db_path = None
+                        for path in possible_paths:
+                            if os.path.exists(path):
+                                db_path = path
+                                break
+                        
+                        if not db_path:
+                            st.sidebar.error("Database path not found")
+                            return
                     elif sample_db == "sample_ecommerce.db":
                         db_path = sample_db
                     else:

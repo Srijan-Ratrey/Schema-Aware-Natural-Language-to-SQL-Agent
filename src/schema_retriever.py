@@ -37,6 +37,7 @@ class SchemaRetriever:
             logger.info(f"Successfully connected to database")
         except SQLAlchemyError as e:
             logger.error(f"Failed to connect to database: {e}")
+            logger.error(f"Connection string: {self.connection_string}")
             raise
     
     def get_database_schema(self) -> Dict[str, Any]:
