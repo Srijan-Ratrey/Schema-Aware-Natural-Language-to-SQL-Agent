@@ -196,8 +196,8 @@ fine_tuned_model/
 output/
 runs/
 
-# Streamlit
-.streamlit/
+# Streamlit (keep config.toml for deployment)
+.streamlit/secrets.toml
 
 # Custom backup files
 *_backup.txt
