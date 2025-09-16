@@ -105,14 +105,14 @@ Schema-Aware-NL2SQL/
 # Project Flow
 ```mermaid
 graph TD
-    A[User Query (Natural Language)] --> B[Schema Retriever<br/>Extract DB Tables & Columns]
-    B --> C[Retriever (FAISS)<br/>Select Relevant Schema]
-    C --> D[T5 Model (Fine-tuned)<br/>Generate SQL Query]
-    D --> E[SQL Validator<br/>Check Schema Consistency & Errors]
-    E -->|Valid Query| F[Execution Engine<br/>Run SQL on Database]
+    A[User Query (Natural Language)] --> B[Schema Retriever: Extract DB Tables and Columns]
+    B --> C[Retriever (FAISS): Select Relevant Schema]
+    C --> D[T5 Model (Fine-tuned): Generate SQL Query]
+    D --> E[SQL Validator: Check Schema Consistency and Errors]
+    E -->|Valid Query| F[Execution Engine: Run SQL on Database]
     E -->|Invalid Query| D
     
-    F --> G[UI Layer<br/>Streamlit / FastAPI]
+    F --> G[UI Layer: Streamlit / FastAPI]
     G --> H[Display Results to User]
 ```
 
