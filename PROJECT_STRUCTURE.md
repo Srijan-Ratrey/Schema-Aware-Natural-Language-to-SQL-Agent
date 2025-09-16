@@ -102,6 +102,15 @@ Schema-Aware-NL2SQL/
 - **Kubernetes**: Production-ready K8s manifests
 - **Cloud**: AWS ECS, Google Cloud Run, Azure configurations
 
+# flowchart TD
+    A[User Query (Natural Language)] --> B[Schema Retriever<br/>Extract DB Tables & Columns]
+    B --> C[Retriever (FAISS)<br/>Relevant Schema Selection]
+    C --> D[T5 Model (Fine-tuned)<br/>NL → SQL Generation]
+    D --> E[SQL Validator<br/>Schema Consistency & Error Handling]
+    E --> F[Execution Engine<br/>Run SQL on Database]
+    F --> G[UI Layer<br/>Streamlit / FastAPI<br/>Display Results]
+
+
 ## 🎯 Usage Patterns
 
 ### 🚀 Quick Start
