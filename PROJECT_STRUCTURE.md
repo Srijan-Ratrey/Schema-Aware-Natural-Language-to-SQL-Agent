@@ -104,7 +104,7 @@ Schema-Aware-NL2SQL/
 
 # Project Flow
 ```mermaid
-flowchart TD
+graph TD
     A[User Query (Natural Language)] --> B[Schema Retriever<br/>Extract DB Tables & Columns]
     B --> C[Retriever (FAISS)<br/>Relevant Schema Selection]
     C --> D[T5 Model (Fine-tuned)<br/>NL → SQL Generation]
