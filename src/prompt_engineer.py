@@ -16,6 +16,21 @@ class PromptEngineer:
     def __init__(self, schema_retriever: SchemaRetriever):
         self.schema_retriever = schema_retriever
         self.schema = schema_retriever.get_database_schema()
+
+    def _find_relevant_tables(self, question: str) -> List[str]:
+        """
+        Pick tables likely relevant to a question by matching the question text
+        against the ACTUAL table names of the connected schema (case-insensitive,
+        with a simple singular/plural variant). Schema-driven, so it works on any DB.
+        """
+        q = question.lower()
+        relevant = []
+        for name in self.schema.get("tables", {}).keys():
+            low = name.lower()
+            variant = low[:-1] if low.endswith("s") else low + "s"
+            if low in q or variant in q:
+                relevant.append(name)
+        return relevant
     
     def get_enhanced_schema_prompt(self) -> str:
         """
@@ -183,20 +198,10 @@ class PromptEngineer:
         """
         # Analyze question to determine what tables/operations are needed
         question_lower = question.lower()
-        
-        # Determine relevant tables
-        relevant_tables = []
-        if any(word in question_lower for word in ['customer', 'customers']):
-            relevant_tables.append('Customer')
-        if any(word in question_lower for word in ['product', 'products']):
-            relevant_tables.append('Product')
-        if any(word in question_lower for word in ['order', 'orders']):
-            relevant_tables.append('Order')
-        if any(word in question_lower for word in ['supplier', 'suppliers']):
-            relevant_tables.append('Supplier')
-        if any(word in question_lower for word in ['item', 'items']):
-            relevant_tables.append('OrderItem')
-        
+
+        # Determine relevant tables from the actual connected schema
+        relevant_tables = self._find_relevant_tables(question)
+
         # Determine operation type
         operation_hints = []
         if any(word in question_lower for word in ['count', 'how many', 'number of']):
@@ -352,21 +357,9 @@ Corrected SQL:
         schema = self.schema
         table_names = list(schema["tables"].keys())
         
-        # Analyze question to determine relevant tables
-        question_lower = question.lower()
-        relevant_tables = []
-        
-        if any(word in question_lower for word in ['customer', 'customers']):
-            relevant_tables.append('Customer')
-        if any(word in question_lower for word in ['product', 'products']):
-            relevant_tables.append('Product')
-        if any(word in question_lower for word in ['order', 'orders']):
-            relevant_tables.append('Order')
-        if any(word in question_lower for word in ['supplier', 'suppliers']):
-            relevant_tables.append('Supplier')
-        if any(word in question_lower for word in ['item', 'items']):
-            relevant_tables.append('OrderItem')
-        
+        # Analyze question to determine relevant tables from the actual schema
+        relevant_tables = self._find_relevant_tables(question)
+
         # If no specific tables identified, use all tables
         if not relevant_tables:
             relevant_tables = table_names

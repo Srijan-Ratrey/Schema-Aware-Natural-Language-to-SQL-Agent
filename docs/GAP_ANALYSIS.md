@@ -75,10 +75,21 @@ over the Spider dev set, executes predicted vs. gold SQL on the real SQLite DBs,
   schemas" claim ([src/nl2sql_model.py:183-351](../src/nl2sql_model.py#L183)).
 
 **Closed by:** [`src/schema_serialization.py`](../src/schema_serialization.py) — one shared
-`serialize_schema()` / `build_input()` used by **training, eval, and the demo**, so the model
-sees the *same* format at train and serve time. With a properly fine-tuned model the
-DB-specific regex in `_clean_sql` should become unnecessary (kept for now for the legacy
-third-party model path; flagged for removal once your own checkpoint is the default).
+`serialize_schema()` / `build_input()` used by **training, eval, and serving**, so the model
+sees the *same* format at train and serve time.
+
+**Done (any-DB refactor):**
+- `NL2SQLModel._prepare_input` now delegates to the shared serialization; the agent
+  (`process_query`) feeds the model the **real introspected schema** of the connected DB
+  (tables + columns + foreign keys) via `schema_from_retriever()`.
+- The ~100 lines of demo-specific regex in `_clean_sql` and the `_is_malformed_sql` /
+  `_generate_simple_fallback_sql` helpers were **removed**; `_clean_sql` is now a minimal,
+  schema-agnostic cleaner.
+- `NL2SQLAgent._correct_table_names` is now **schema-driven** — it reconciles generated table
+  names against the actual connected schema (case-insensitive + singular/plural), quotes
+  reserved words like `Order`, and makes no assumptions about demo names.
+- `PromptEngineer` table detection now derives relevant tables from the actual schema
+  (`_find_relevant_tables`) instead of hardcoded `Customer/Product/Order/...` keywords.
 
 ### Gap 4 — No model export to the HF Hub
 

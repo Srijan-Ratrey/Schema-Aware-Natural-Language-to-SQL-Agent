@@ -10,10 +10,17 @@ from typing import Dict, List, Any, Optional, Tuple
 from .schema_retriever import SchemaRetriever, create_schema_retriever
 from .nl2sql_model import NL2SQLModel, load_model
 from .prompt_engineer import PromptEngineer
+from .schema_serialization import schema_from_retriever, serialize_schema
 import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Common SQL reserved words that must be quoted when used as identifiers.
+_RESERVED = {
+    "order", "group", "select", "from", "where", "table", "user", "by",
+    "join", "index", "key", "primary", "values", "check", "default", "column",
+}
 
 
 class NL2SQLAgent:
@@ -116,50 +123,38 @@ class NL2SQLAgent:
     
     def _correct_table_names(self, sql_query: str) -> str:
         """
-        Correct common table name mismatches in generated SQL
-        
-        Args:
-            sql_query: Generated SQL query
-            
-        Returns:
-            Corrected SQL query with proper table names
+        Reconcile table names in generated SQL against the *actual* connected schema.
+
+        This is schema-driven: it builds the candidate map from the real table names
+        of whatever database is connected, so it works on any DB. It only rewrites a
+        token after FROM/JOIN/INTO/UPDATE when that token matches a real table
+        case-insensitively or via a simple singular/plural variant — and only when the
+        correction differs from what the model produced. No hardcoded demo names.
         """
-        # Define table name mappings (common model outputs -> actual table names)
-        table_mappings = {
-            'customers': 'Customer',
-            'CUSTOMERS': 'Customer',
-            'customer': 'Customer',
-            'orders': 'Order',
-            'ORDERS': 'Order',
-            'order': 'Order',
-            'products': 'Product',
-            'PRODUCTS': 'Product',
-            'product': 'Product',
-            'suppliers': 'Supplier',
-            'SUPPLIERS': 'Supplier',
-            'supplier': 'Supplier',
-            'order_items': 'OrderItem',
-            'ORDER_ITEMS': 'OrderItem',
-            'orderitem': 'OrderItem',
-            'ORDERITEM': 'OrderItem'
-        }
-        
-        corrected_sql = sql_query
-        
-        # Replace table names (case-insensitive)
-        for wrong_name, correct_name in table_mappings.items():
-            # Use regex to match whole words only
-            import re
-            pattern = r'\b' + re.escape(wrong_name) + r'\b'
-            corrected_sql = re.sub(pattern, correct_name, corrected_sql, flags=re.IGNORECASE)
-        
-        # Also handle quoted table names
-        for wrong_name, correct_name in table_mappings.items():
-            corrected_sql = corrected_sql.replace(f'"{wrong_name}"', f'"{correct_name}"')
-            corrected_sql = corrected_sql.replace(f"'{wrong_name}'", f"'{correct_name}'")
-            corrected_sql = corrected_sql.replace(f'[{wrong_name}]', f'[{correct_name}]')
-        
-        return corrected_sql
+        if not self.current_schema or not self.current_schema.get("tables"):
+            return sql_query
+
+        actual_tables = list(self.current_schema["tables"].keys())
+
+        # Map lowercased name (and a simple plural/singular variant) -> actual name.
+        lookup: Dict[str, str] = {}
+        for name in actual_tables:
+            low = name.lower()
+            lookup.setdefault(low, name)
+            variant = low[:-1] if low.endswith("s") else low + "s"
+            lookup.setdefault(variant, name)
+
+        def _replace(match: "re.Match") -> str:
+            keyword, ident = match.group(1), match.group(2)
+            target = lookup.get(ident.lower())
+            if target and target != ident:
+                # Quote names that are reserved words or need it (e.g. "Order").
+                safe = f'"{target}"' if not ident.startswith(('"', '[', '`')) and target.lower() in _RESERVED else target
+                return f"{keyword} {safe}"
+            return match.group(0)
+
+        pattern = r'\b(FROM|JOIN|INTO|UPDATE)\s+["\[\`]?([A-Za-z_][A-Za-z0-9_]*)["\]\`]?'
+        return re.sub(pattern, _replace, sql_query, flags=re.IGNORECASE)
 
     def _attempt_error_correction(self, question: str, failed_sql: str, error_message: str) -> Dict[str, Any]:
         """
@@ -255,18 +250,16 @@ class NL2SQLAgent:
         start_time = time.time()
         
         try:
-            # Use enhanced prompt engineering for better SQL generation
-            if self.prompt_engineer:
-                # Use structured prompt for better results
-                enhanced_prompt = self.prompt_engineer.get_structured_prompt(natural_language_query)
-            else:
-                # Fallback to basic schema prompt
-                enhanced_prompt = self.schema_retriever.get_schema_prompt()
-            
-            # Generate SQL using the model with enhanced prompt
+            # Serialize the REAL schema of the connected database (tables, columns,
+            # foreign keys) into the shared train/inference format. This is what makes
+            # generation schema-aware for any database, not just the demo schema.
+            tables, foreign_keys = schema_from_retriever(self.current_schema)
+            schema_str = serialize_schema(tables, foreign_keys)
+
+            # Generate SQL using the model with the serialized schema
             generation_result = self.model.generate_sql(
-                natural_language_query, 
-                enhanced_prompt
+                natural_language_query,
+                schema_str
             )
             
             if generation_result.get("error"):

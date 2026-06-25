@@ -89,6 +89,28 @@ def schema_from_spider_tables(table_entry: dict) -> Tuple[Dict[str, List[str]], 
     return tables, foreign_keys
 
 
+def schema_from_retriever(schema_dict: dict) -> Tuple[Dict[str, List[str]], List[Tuple[str, str]]]:
+    """
+    Convert the rich schema produced by ``SchemaRetriever.get_database_schema()``
+    into the ``(tables, foreign_keys)`` form used by ``serialize_schema``/``build_input``.
+
+    This is the bridge that makes the agent schema-driven for *any* connected DB:
+    the model receives the real tables, columns and relationships introspected from
+    the database, not a hand-written demo schema.
+    """
+    tables: Dict[str, List[str]] = {}
+    for tname, tinfo in schema_dict.get("tables", {}).items():
+        tables[tname] = [c["name"] for c in tinfo.get("columns", [])]
+
+    foreign_keys: List[Tuple[str, str]] = []
+    for rel in schema_dict.get("relationships", []):
+        ft, tt = rel.get("from_table"), rel.get("to_table")
+        for fc, tc in zip(rel.get("from_columns", []), rel.get("to_columns", [])):
+            foreign_keys.append((f"{ft}.{fc}", f"{tt}.{tc}"))
+
+    return tables, foreign_keys
+
+
 def schema_from_sqlite(db_path: str) -> Tuple[Dict[str, List[str]], List[Tuple[str, str]]]:
     """
     Introspect a live SQLite database into (tables, foreign_keys).
