@@ -60,31 +60,36 @@ def parse_args():
                    help="Repo id to push the LoRA *adapter* to.")
     p.add_argument("--merge-and-push", default=None,
                    help="Repo id to push the *merged* (base+LoRA) model to.")
+    p.add_argument("--tables-json", default=None,
+                   help="Path to Spider tables.json (from the official Spider zip). "
+                        "Recommended — the HF mirror does not ship schema info.")
     return p.parse_args()
 
 
-def build_schema_lookup(spider_split):
+def build_schema_lookup(tables_json=None):
     """
-    Spider rows on the HF hub already carry `db_id`; the `tables.json` info is exposed
-    via the dataset's builtin features in most mirrors. We reconstruct a {db_id: (tables, fks)}
-    lookup from the `spider` dataset's `tables` config when available, else fall back to
-    the per-row schema fields.
-    """
-    from datasets import load_dataset
+    Build a {db_id: (tables, foreign_keys)} lookup from Spider's schema definitions.
 
-    # The canonical schema source is the separate `tables.json`. The `spider` dataset
-    # exposes it via the "tables" portion in many mirrors; load it defensively.
-    try:
-        tables_ds = load_dataset("spider", "tables")  # some mirrors expose this
-        entries = list(tables_ds[list(tables_ds.keys())[0]])
-    except Exception:
-        # Fall back: derive schemas from the unique db structures present in the split.
-        # Requires the rows to carry `db_table_names` / `db_column_names`. If absent,
-        # the user must pass a local tables.json (see --help in evaluate_spider.py).
-        raise RuntimeError(
-            "Could not load Spider 'tables' config. Download the official Spider zip and "
-            "build the schema lookup from tables.json (see docs/NL2SQL_WALKTHROUGH.md)."
-        )
+    Preferred source is a local tables.json from the official Spider download
+    (pass --tables-json). As a fallback we try the HF 'tables' config, which most
+    mirrors do NOT provide.
+    """
+    import json
+
+    if tables_json:
+        with open(tables_json, "r", encoding="utf-8") as f:
+            entries = json.load(f)
+    else:
+        from datasets import load_dataset
+        try:
+            tables_ds = load_dataset("spider", "tables")
+            entries = list(tables_ds[list(tables_ds.keys())[0]])
+        except Exception as e:
+            raise RuntimeError(
+                "Could not load Spider schemas. Download the official Spider zip and pass "
+                "--tables-json /path/to/spider/tables.json (the HF mirror has no schema "
+                "config). See docs/NL2SQL_WALKTHROUGH.md."
+            ) from e
 
     lookup = {}
     for entry in entries:
@@ -106,7 +111,7 @@ def main():
 
     print(f"Loading Spider dataset...")
     spider = load_dataset("spider")
-    schema_lookup = build_schema_lookup(spider)
+    schema_lookup = build_schema_lookup(args.tables_json)
 
     print(f"Loading base model: {args.base_model}")
     tok = AutoTokenizer.from_pretrained(args.base_model)

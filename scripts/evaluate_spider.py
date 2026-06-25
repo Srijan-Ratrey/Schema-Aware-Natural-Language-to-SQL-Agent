@@ -50,6 +50,9 @@ def parse_args():
                    help="Local path / Hub id of a LoRA adapter (requires --base-model).")
     p.add_argument("--spider-db-dir", default="./spider/database",
                    help="Dir containing <db_id>/<db_id>.sqlite for each DB.")
+    p.add_argument("--tables-json", default=None,
+                   help="Path to Spider tables.json (from the official Spider zip). "
+                        "Recommended — the HF mirror does not ship schema info.")
     p.add_argument("--limit", type=int, default=None, help="Evaluate only the first N dev rows.")
     p.add_argument("--num-beams", type=int, default=5)
     p.add_argument("--max-out", type=int, default=256)
@@ -111,10 +114,22 @@ def main():
     if args.limit:
         dev = dev.select(range(min(args.limit, len(dev))))
 
-    # Build {db_id: (tables, fks)} schema lookup from the tables config.
-    tables_ds = load_dataset("spider", "tables")
+    # Build {db_id: (tables, fks)} schema lookup. Prefer a local tables.json.
     schema_lookup = {}
-    for entry in tables_ds[list(tables_ds.keys())[0]]:
+    if args.tables_json:
+        import json
+        with open(args.tables_json, "r", encoding="utf-8") as f:
+            entries = json.load(f)
+    else:
+        try:
+            tables_ds = load_dataset("spider", "tables")
+            entries = list(tables_ds[list(tables_ds.keys())[0]])
+        except Exception as e:
+            raise SystemExit(
+                "Could not load Spider schemas. Pass --tables-json /path/to/spider/tables.json "
+                "(the HF mirror has no schema config)."
+            ) from e
+    for entry in entries:
         schema_lookup[entry["db_id"]] = schema_from_spider_tables(entry)
 
     db_dir = Path(args.spider_db_dir)
