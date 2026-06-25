@@ -148,7 +148,13 @@ def main():
 
     collator = DataCollatorForSeq2Seq(tok, model=model)
 
-    training_args = Seq2SeqTrainingArguments(
+    # Build args/trainer in a version-tolerant way: the HF API renamed a couple of
+    # kwargs across versions (evaluation_strategy -> eval_strategy, and the Trainer's
+    # tokenizer -> processing_class in transformers 4.46+). Detect what's supported so
+    # this runs on both older pinned and the latest Colab transformers.
+    import inspect
+    ta_params = inspect.signature(Seq2SeqTrainingArguments.__init__).parameters
+    ta_kwargs = dict(
         output_dir=args.output_dir,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
@@ -157,18 +163,22 @@ def main():
         num_train_epochs=args.epochs,
         fp16=(not args.no_fp16 and torch.cuda.is_available()),
         predict_with_generate=True,
-        eval_strategy="epoch",
         save_strategy="epoch",
         logging_steps=50,
         save_total_limit=2,
         report_to="none",
     )
+    ta_kwargs["eval_strategy" if "eval_strategy" in ta_params else "evaluation_strategy"] = "epoch"
+    training_args = Seq2SeqTrainingArguments(**ta_kwargs)
 
-    trainer = Seq2SeqTrainer(
+    trainer_params = inspect.signature(Seq2SeqTrainer.__init__).parameters
+    trainer_kwargs = dict(
         model=model, args=training_args,
         train_dataset=train_ds, eval_dataset=val_ds,
-        data_collator=collator, tokenizer=tok,
+        data_collator=collator,
     )
+    trainer_kwargs["processing_class" if "processing_class" in trainer_params else "tokenizer"] = tok
+    trainer = Seq2SeqTrainer(**trainer_kwargs)
 
     print("Starting training...")
     trainer.train()
