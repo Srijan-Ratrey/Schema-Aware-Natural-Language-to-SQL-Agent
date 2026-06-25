@@ -53,7 +53,8 @@ def parse_args():
     p.add_argument("--lora-dropout", type=float, default=0.05)
     p.add_argument("--max-in", type=int, default=512)
     p.add_argument("--max-out", type=int, default=256)
-    p.add_argument("--no-fp16", action="store_true", help="Disable fp16 (use on CPU/MPS).")
+    p.add_argument("--no-fp16", action="store_true",
+                   help="Force fp32 (disable bf16). T5 is never run in fp16 — it NaNs.")
     p.add_argument("--max-train-samples", type=int, default=None,
                    help="Cap training rows (for quick smoke tests).")
     p.add_argument("--push-to-hub", default=None,
@@ -154,6 +155,16 @@ def main():
     # this runs on both older pinned and the latest Colab transformers.
     import inspect
     ta_params = inspect.signature(Seq2SeqTrainingArguments.__init__).parameters
+
+    # CRITICAL: the original T5 checkpoints (t5-small/base/large) were trained in bf16 and
+    # are numerically unstable in fp16 — fp16 produces NaN losses, training collapses, and
+    # the model degenerates to emitting a single high-frequency token (e.g. ","). So NEVER
+    # use fp16 for T5. Prefer bf16 where the GPU supports it, otherwise fall back to fp32.
+    use_bf16 = (
+        torch.cuda.is_available()
+        and torch.cuda.is_bf16_supported()
+        and not args.no_fp16
+    )
     ta_kwargs = dict(
         output_dir=args.output_dir,
         per_device_train_batch_size=args.batch_size,
@@ -161,7 +172,8 @@ def main():
         gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr,
         num_train_epochs=args.epochs,
-        fp16=(not args.no_fp16 and torch.cuda.is_available()),
+        bf16=use_bf16,
+        fp16=False,
         predict_with_generate=True,
         save_strategy="epoch",
         logging_steps=50,
@@ -170,6 +182,7 @@ def main():
     )
     ta_kwargs["eval_strategy" if "eval_strategy" in ta_params else "evaluation_strategy"] = "epoch"
     training_args = Seq2SeqTrainingArguments(**ta_kwargs)
+    print(f"Precision: {'bf16' if use_bf16 else 'fp32'} (fp16 disabled for T5 stability)")
 
     trainer_params = inspect.signature(Seq2SeqTrainer.__init__).parameters
     trainer_kwargs = dict(
