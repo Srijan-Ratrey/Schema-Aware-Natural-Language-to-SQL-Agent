@@ -63,10 +63,13 @@ def parse_args():
     p.add_argument("--tables-json", default=None,
                    help="Path to Spider tables.json (from the official Spider zip). "
                         "Recommended — the HF mirror does not ship schema info.")
+    p.add_argument("--dataset", default="xlangai/spider",
+                   help="HF dataset id for Spider (bare 'spider' is no longer loadable on "
+                        "recent datasets/huggingface_hub).")
     return p.parse_args()
 
 
-def build_schema_lookup(tables_json=None):
+def build_schema_lookup(tables_json=None, dataset="xlangai/spider"):
     """
     Build a {db_id: (tables, foreign_keys)} lookup from Spider's schema definitions.
 
@@ -82,7 +85,7 @@ def build_schema_lookup(tables_json=None):
     else:
         from datasets import load_dataset
         try:
-            tables_ds = load_dataset("spider", "tables")
+            tables_ds = load_dataset(dataset, "tables")
             entries = list(tables_ds[list(tables_ds.keys())[0]])
         except Exception as e:
             raise RuntimeError(
@@ -109,9 +112,9 @@ def main():
     )
     from peft import LoraConfig, get_peft_model, TaskType
 
-    print(f"Loading Spider dataset...")
-    spider = load_dataset("spider")
-    schema_lookup = build_schema_lookup(args.tables_json)
+    print(f"Loading Spider dataset ({args.dataset})...")
+    spider = load_dataset(args.dataset)
+    schema_lookup = build_schema_lookup(args.tables_json, args.dataset)
 
     print(f"Loading base model: {args.base_model}")
     tok = AutoTokenizer.from_pretrained(args.base_model)

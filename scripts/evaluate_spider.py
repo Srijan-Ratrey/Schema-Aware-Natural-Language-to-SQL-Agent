@@ -53,6 +53,9 @@ def parse_args():
     p.add_argument("--tables-json", default=None,
                    help="Path to Spider tables.json (from the official Spider zip). "
                         "Recommended — the HF mirror does not ship schema info.")
+    p.add_argument("--dataset", default="xlangai/spider",
+                   help="HF dataset id for Spider (bare 'spider' is no longer loadable on "
+                        "recent datasets/huggingface_hub).")
     p.add_argument("--limit", type=int, default=None, help="Evaluate only the first N dev rows.")
     p.add_argument("--num-beams", type=int, default=5)
     p.add_argument("--max-out", type=int, default=256)
@@ -108,8 +111,8 @@ def main():
 
     tok, model, device = load_model(args)
 
-    print("Loading Spider dev set + schemas...")
-    spider = load_dataset("spider")
+    print(f"Loading Spider dev set + schemas ({args.dataset})...")
+    spider = load_dataset(args.dataset)
     dev = spider["validation"]
     if args.limit:
         dev = dev.select(range(min(args.limit, len(dev))))
@@ -122,7 +125,7 @@ def main():
             entries = json.load(f)
     else:
         try:
-            tables_ds = load_dataset("spider", "tables")
+            tables_ds = load_dataset(args.dataset, "tables")
             entries = list(tables_ds[list(tables_ds.keys())[0]])
         except Exception as e:
             raise SystemExit(
