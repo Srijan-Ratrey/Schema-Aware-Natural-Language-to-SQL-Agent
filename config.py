@@ -10,13 +10,15 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent
 
 # Model Configuration
-DEFAULT_MODEL = "mrm8488/t5-base-finetuned-wikiSQL"
+# Keep this in sync with the default in src/nl2sql_model.py / src/nl2sql_agent.py.
+DEFAULT_MODEL = "gaussalgo/T5-LM-Large-text2sql-spider"
 ALTERNATIVE_MODELS = [
-    "mrm8488/t5-base-finetuned-wikiSQL",  # WikiSQL trained T5
-    "tscholak/cxmefzzi",                  # Spider T5-3B (large)
-    "tscholak/1zha5ono",                  # Spider T5-base
-    "t5-small",                           # Standard T5 small
-    "t5-base"                             # Standard T5 base
+    "gaussalgo/T5-LM-Large-text2sql-spider",  # Schema-aware Spider T5 (default)
+    "tscholak/cxmefzzi",                      # Spider T5-3B (large)
+    "tscholak/1zha5ono",                      # Spider T5-base
+    "mrm8488/t5-base-finetuned-wikiSQL",      # WikiSQL T5 (single-table only)
+    "t5-small",                               # Standard T5 small
+    "t5-base"                                 # Standard T5 base
 ]
 
 # Database Configuration

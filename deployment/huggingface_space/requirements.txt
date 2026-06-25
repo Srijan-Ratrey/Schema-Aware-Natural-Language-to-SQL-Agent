@@ -1,0 +1,5 @@
+transformers==4.35.2
+torch==2.1.1
+sqlglot==18.17.0
+gradio==4.44.0
+sentencepiece==0.1.99
