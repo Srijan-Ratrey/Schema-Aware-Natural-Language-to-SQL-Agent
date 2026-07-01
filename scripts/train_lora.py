@@ -3,9 +3,10 @@
 LoRA fine-tuning of T5 on the Spider text-to-SQL benchmark.
 
 This is the *real* fine-tuning entry point referenced by docs/NL2SQL_WALKTHROUGH.md
-and docs/GAP_ANALYSIS.md. It is designed to run on a single free GPU (Colab/Kaggle T4):
-LoRA on the attention q/v projections, fp16, gradient checkpointing, small batch +
-accumulation, and a checkpoint every epoch.
+and docs/GAP_ANALYSIS.md. It is designed to run on a single free GPU (Colab/Kaggle T4) or locally on Apple Silicon
+(MPS): LoRA on the attention q/k/v/o projections, fp32/bf16 (never fp16 — T5 NaNs),
+gradient checkpointing, small batch + accumulation, a cosine LR schedule with warmup,
+early stopping, and best-checkpoint selection.
 
 Schema serialization is delegated to `src/schema_serialization.py` so the exact format
 used here is the same one used at eval and serving time.
@@ -51,6 +52,15 @@ def parse_args():
     p.add_argument("--lora-r", type=int, default=16)
     p.add_argument("--lora-alpha", type=int, default=32)
     p.add_argument("--lora-dropout", type=float, default=0.05)
+    p.add_argument("--lora-targets", default="q,k,v,o",
+                   help="Comma-separated T5 modules to adapt. Default 'q,k,v,o' (wider than the "
+                        "old 'q,v') lifts accuracy; add 'wi,wo' for the feed-forward layers at "
+                        "higher memory/time cost.")
+    p.add_argument("--patience", type=int, default=2,
+                   help="Early-stopping patience in epochs (stop if eval loss doesn't improve). "
+                        "Set 0 to disable early stopping.")
+    p.add_argument("--dataloader-workers", type=int, default=0,
+                   help="DataLoader worker processes. Keep 0 on macOS/MPS to avoid fork issues.")
     p.add_argument("--max-in", type=int, default=512)
     p.add_argument("--max-out", type=int, default=256)
     p.add_argument("--no-fp16", action="store_true",
@@ -105,13 +115,28 @@ def build_schema_lookup(tables_json=None, dataset="xlangai/spider"):
 def main():
     args = parse_args()
 
+    # On Apple Silicon (MPS) a handful of T5 ops have no Metal kernel; let them fall back
+    # to CPU instead of raising. Harmless on CUDA/CPU. Set before importing torch.
+    import os
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
     import torch
     from datasets import load_dataset
     from transformers import (
         AutoTokenizer, AutoModelForSeq2SeqLM,
         Seq2SeqTrainer, Seq2SeqTrainingArguments, DataCollatorForSeq2Seq,
+        EarlyStoppingCallback,
     )
     from peft import LoraConfig, get_peft_model, TaskType
+
+    # Report the compute backend the Trainer will use so `mps`/`cuda`/`cpu` is obvious in logs.
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+    print(f"Compute backend: {device}")
 
     print(f"Loading Spider dataset ({args.dataset})...")
     spider = load_dataset(args.dataset)
@@ -123,10 +148,11 @@ def main():
     model.gradient_checkpointing_enable()
     model.config.use_cache = False  # required with gradient checkpointing
 
+    lora_targets = [t.strip() for t in args.lora_targets.split(",") if t.strip()]
     lora = LoraConfig(
         task_type=TaskType.SEQ_2_SEQ_LM,
         r=args.lora_r, lora_alpha=args.lora_alpha, lora_dropout=args.lora_dropout,
-        target_modules=["q", "v"],  # T5 attention query/value projections
+        target_modules=lora_targets,  # e.g. q/k/v/o attention projections (+ wi/wo FF)
     )
     model = get_peft_model(model, lora)
     model.print_trainable_parameters()
@@ -171,11 +197,22 @@ def main():
         per_device_eval_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr,
+        lr_scheduler_type="cosine",
+        warmup_ratio=0.05,
+        weight_decay=0.01,
         num_train_epochs=args.epochs,
         bf16=use_bf16,
         fp16=False,
-        predict_with_generate=True,
+        # No compute_metrics is attached, so generation during eval would be pure wasted compute
+        # (its output is never scored). Keep it off — eval reports loss only, which is what we use
+        # for best-checkpoint selection. Real execution accuracy is measured by evaluate_spider.py.
+        predict_with_generate=False,
+        group_by_length=True,           # batch similar-length sequences -> less padding waste
+        dataloader_num_workers=args.dataloader_workers,
         save_strategy="epoch",
+        load_best_model_at_end=True,    # keep the best-generalizing adapter, not just the last epoch
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
         logging_steps=50,
         save_total_limit=2,
         report_to="none",
@@ -191,6 +228,8 @@ def main():
         data_collator=collator,
     )
     trainer_kwargs["processing_class" if "processing_class" in trainer_params else "tokenizer"] = tok
+    if args.patience > 0:
+        trainer_kwargs["callbacks"] = [EarlyStoppingCallback(early_stopping_patience=args.patience)]
     trainer = Seq2SeqTrainer(**trainer_kwargs)
 
     print("Starting training...")

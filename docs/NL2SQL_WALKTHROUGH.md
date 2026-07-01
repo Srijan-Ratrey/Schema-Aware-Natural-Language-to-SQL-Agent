@@ -70,7 +70,8 @@ serve never drift apart.
 | **LoRA on T5-large** (recommended) | `t5-large` | ~10–12 GB | PEFT LoRA trains <1% of params; fits T4. Best accuracy. |
 | Full fine-tune T5-base | `t5-base` (220M) | ~12 GB | Simpler, single merged checkpoint, lower ceiling. |
 
-Use LoRA on T5-large with gradient checkpointing + fp16 + small batch + accumulation to fit a T4.
+Use LoRA on T5-large with gradient checkpointing + fp32/bf16 (never fp16 — T5 NaNs) + small batch +
+accumulation to fit a T4.
 
 ```bash
 pip install -q transformers datasets peft accelerate evaluate sqlglot sqlparse sentencepiece
@@ -81,14 +82,37 @@ pip install -q transformers datasets peft accelerate evaluate sqlglot sqlparse s
 ## 3. Fine-tuning with LoRA
 
 See [`scripts/train_lora.py`](../scripts/train_lora.py) for the runnable version. Key choices:
-LoRA on T5 attention `q`/`v` projections (`r=16, alpha=32`), `fp16`, gradient checkpointing,
-`per_device_train_batch_size=4` × `gradient_accumulation_steps=8` (effective 32), higher LR
-(~1e-3) since LoRA likes it, 5 epochs, checkpoint per epoch.
+LoRA on T5 attention `q`/`k`/`v`/`o` projections (`r=16, alpha=32`; wider than q/v alone for higher
+accuracy — add `wi`/`wo` for the feed-forward layers via `--lora-targets` to push it further),
+gradient checkpointing, `per_device_train_batch_size=4` × `gradient_accumulation_steps=8`
+(effective 32), higher LR (~1e-3) since LoRA likes it, on a **cosine schedule with warmup**, up to
+5 epochs with **early stopping** (best `eval_loss` checkpoint is kept), checkpoint per epoch.
+
+Precision: **never fp16** — the original T5 checkpoints NaN in fp16 and collapse to a single token.
+The script uses bf16 where the GPU supports it (Ampere+) and otherwise **fp32** (the case on a T4 or
+on Apple Silicon). Per-epoch eval reports **loss only** — generation-based eval is off because no
+metric consumed it, so it was pure wasted compute; the real number comes from Section 4.
 
 Colab/Kaggle survival tips:
 - Checkpoint to Google Drive / Kaggle output every epoch — sessions die at ~12h (Colab) / 9h (Kaggle).
 - OOM? Drop batch size to 2, raise accumulation to 16, or switch base to `t5-base`.
-- 5 epochs on Spider (~7k rows) is ~2–4h on a T4 with LoRA.
+- 5 epochs on Spider (~7k rows) is ~2–4h on a T4 with LoRA (often less, thanks to early stopping).
+
+### Train locally on Apple Silicon (M4 Pro)
+
+You can fine-tune on a Mac without a Colab GPU — PyTorch uses the **MPS** backend. Use `t5-base`
+(t5-large is impractically slow on MPS), fp32 (auto-selected when there's no CUDA), and set the MPS
+op-fallback flag so the few T5 ops without Metal kernels fall back to CPU instead of erroring:
+
+```bash
+PYTORCH_ENABLE_MPS_FALLBACK=1 python scripts/train_lora.py \
+    --base-model t5-base --tables-json /path/to/spider/tables.json \
+    --epochs 5 --batch-size 4 --output-dir nl2sql-t5-lora
+```
+
+The script prints `Compute backend: mps` at startup so you can confirm the GPU is in use. Expect it
+to be slower than a CUDA GPU but well within reach for an overnight run — the M4 Pro's unified memory
+comfortably holds `t5-base` + LoRA in fp32. (Keep `--dataloader-workers 0`, the default, on macOS.)
 
 ---
 
