@@ -218,6 +218,16 @@ def main():
         report_to="none",
     )
     ta_kwargs["eval_strategy" if "eval_strategy" in ta_params else "evaluation_strategy"] = "epoch"
+
+    # Drop any kwargs this transformers version doesn't accept (its __init__ has no **kwargs
+    # catch-all, so an unknown key raises). transformers 5.x removed a few args (e.g.
+    # group_by_length). The ones dropped here are pure optimizations, not correctness.
+    unsupported = [k for k in ta_kwargs if k not in ta_params]
+    for k in unsupported:
+        ta_kwargs.pop(k)
+    if unsupported:
+        print(f"Note: this transformers version doesn't support {unsupported}; continuing without them.")
+
     training_args = Seq2SeqTrainingArguments(**ta_kwargs)
     print(f"Precision: {'bf16' if use_bf16 else 'fp32'} (fp16 disabled for T5 stability)")
 
