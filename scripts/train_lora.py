@@ -60,7 +60,11 @@ def parse_args():
                    help="Early-stopping patience in epochs (stop if eval loss doesn't improve). "
                         "Set 0 to disable early stopping.")
     p.add_argument("--dataloader-workers", type=int, default=0,
-                   help="DataLoader worker processes. Keep 0 on macOS/MPS to avoid fork issues.")
+                   help="DataLoader worker processes. Keep 0 on macOS/MPS to avoid fork issues; "
+                        "2-4 on Colab/Linux keeps the GPU fed.")
+    p.add_argument("--no-grad-checkpointing", action="store_true",
+                   help="Disable gradient checkpointing. Big speedup when the model leaves VRAM "
+                        "free (e.g. t5-base on a 15GB T4); leave it on if you hit OOM.")
     p.add_argument("--max-in", type=int, default=512)
     p.add_argument("--max-out", type=int, default=256)
     p.add_argument("--no-fp16", action="store_true",
@@ -145,8 +149,12 @@ def main():
     print(f"Loading base model: {args.base_model}")
     tok = AutoTokenizer.from_pretrained(args.base_model)
     model = AutoModelForSeq2SeqLM.from_pretrained(args.base_model)
-    model.gradient_checkpointing_enable()
-    model.config.use_cache = False  # required with gradient checkpointing
+    # Gradient checkpointing recomputes activations on the backward pass to save memory, at a
+    # real speed cost. It's on by default so big models fit a small GPU, but for a model that
+    # leaves lots of VRAM free (e.g. t5-base on a 15GB T4) turning it off is a large speedup.
+    if not args.no_grad_checkpointing:
+        model.gradient_checkpointing_enable()
+        model.config.use_cache = False  # required with gradient checkpointing
 
     lora_targets = [t.strip() for t in args.lora_targets.split(",") if t.strip()]
     lora = LoraConfig(
