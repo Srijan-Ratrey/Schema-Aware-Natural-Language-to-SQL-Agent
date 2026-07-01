@@ -73,6 +73,28 @@ serve never drift apart.
 Use LoRA on T5-large with gradient checkpointing + fp32/bf16 (never fp16 — T5 NaNs) + small batch +
 accumulation to fit a T4.
 
+### Higher accuracy: 4-bit QLoRA on a code LLM (Qwen2.5-Coder)
+
+T5 tops out around the mid-60s% (t5-large) on Spider execution accuracy. For a real jump
+(~75–85%), fine-tune a **decoder-only code model** instead — `Qwen/Qwen2.5-Coder-7B-Instruct` in
+**4-bit QLoRA** fits a free T4 (~6–8 GB) and is far stronger at SQL. This uses a different recipe
+(causal LM, prompt tokens masked from the loss, chat-template prompt) implemented in
+[`scripts/train_qlora.py`](../scripts/train_qlora.py) + the `--causal` flag of
+[`scripts/evaluate_spider.py`](../scripts/evaluate_spider.py), and the Colab
+[`notebooks/finetune_qlora_colab.ipynb`](../notebooks/finetune_qlora_colab.ipynb). No Unsloth/TRL —
+just transformers + peft + bitsandbytes. The schema serialization is shared with the T5 path
+(`build_causal_messages` in `src/schema_serialization.py`), so the schema format never drifts.
+
+```bash
+python scripts/train_qlora.py --tables-json /path/to/spider/tables.json \
+    --epochs 2 --output-dir nl2sql-qwen-qlora
+python scripts/evaluate_spider.py --causal \
+    --base-model Qwen/Qwen2.5-Coder-7B-Instruct --adapter ./nl2sql-qwen-qlora \
+    --tables-json /path/to/spider/tables.json --spider-db-dir ./spider/database --limit 200
+```
+Needs CUDA (bitsandbytes is CUDA-only — this path won't run on CPU or Apple Silicon). Smaller/faster:
+`Qwen/Qwen2.5-Coder-3B-Instruct` or `-1.5B-Instruct`.
+
 ```bash
 pip install -q transformers datasets peft accelerate evaluate sqlglot sqlparse sentencepiece
 ```

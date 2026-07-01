@@ -58,6 +58,37 @@ def build_input(
     return f"translate to SQL: {question} | schema: {schema}"
 
 
+# System instruction shared by training and inference for the decoder-only (causal) path,
+# so the chat prompt never drifts between train and serve. Kept terse on purpose: we want
+# just the SQL back, no prose or Markdown fences.
+CAUSAL_SYSTEM_PROMPT = (
+    "You are an expert data analyst. Given a SQLite database schema and a question, "
+    "reply with ONLY a single valid SQLite SELECT query that answers it. "
+    "No explanation, no comments, no Markdown code fences."
+)
+
+
+def build_causal_messages(
+    question: str,
+    tables: Dict[str, List[str]],
+    foreign_keys: Optional[List[Tuple[str, str]]] = None,
+) -> List[Dict[str, str]]:
+    """
+    Build chat ``messages`` for a decoder-only instruct model (e.g. Qwen2.5-Coder).
+
+    Returns the system + user turns ready for ``tokenizer.apply_chat_template(...)``. The
+    schema is serialized by the same :func:`serialize_schema` used everywhere else, so the
+    decoder-only path stays schema-consistent with the T5 path. The assistant turn (the gold
+    SQL at train time) is appended by the caller.
+    """
+    schema = serialize_schema(tables, foreign_keys)
+    user = f"Database schema:\n{schema}\n\nQuestion: {question}"
+    return [
+        {"role": "system", "content": CAUSAL_SYSTEM_PROMPT},
+        {"role": "user", "content": user},
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # Spider `tables.json` → serialized schema
 # --------------------------------------------------------------------------- #

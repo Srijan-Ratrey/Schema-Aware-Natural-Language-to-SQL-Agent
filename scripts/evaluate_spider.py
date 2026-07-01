@@ -37,7 +37,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.schema_serialization import build_input, schema_from_spider_tables  # noqa: E402
+from src.schema_serialization import (  # noqa: E402
+    build_input, build_causal_messages, schema_from_spider_tables,
+)
 
 
 def parse_args():
@@ -59,31 +61,60 @@ def parse_args():
     p.add_argument("--limit", type=int, default=None, help="Evaluate only the first N dev rows.")
     p.add_argument("--num-beams", type=int, default=5)
     p.add_argument("--max-out", type=int, default=256)
+    p.add_argument("--causal", action="store_true",
+                   help="Evaluate a decoder-only causal LM (e.g. a Qwen2.5-Coder QLoRA adapter "
+                        "from scripts/train_qlora.py) instead of a T5 seq2seq model.")
     p.add_argument("--out", default="docs/EVAL.md", help="Where to write the report.")
     return p.parse_args()
 
 
 def load_model(args):
     import torch
-    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM
+
+    AutoModel = AutoModelForCausalLM if args.causal else AutoModelForSeq2SeqLM
 
     if args.adapter:
         if not args.base_model:
             raise SystemExit("--adapter requires --base-model")
         from peft import PeftModel
         tok = AutoTokenizer.from_pretrained(args.base_model)
-        base = AutoModelForSeq2SeqLM.from_pretrained(args.base_model)
+        base = AutoModel.from_pretrained(args.base_model)
         model = PeftModel.from_pretrained(base, args.adapter)
         model = model.merge_and_unload()
     else:
         if not args.model:
             raise SystemExit("Provide --model (merged) or --base-model + --adapter")
         tok = AutoTokenizer.from_pretrained(args.model)
-        model = AutoModelForSeq2SeqLM.from_pretrained(args.model)
+        model = AutoModel.from_pretrained(args.model)
+
+    if args.causal and tok.pad_token is None:
+        tok.pad_token = tok.eos_token
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device).eval()
     return tok, model, device
+
+
+def clean_sql(text):
+    """Extract a bare SQL statement from a causal model's completion.
+
+    Instruct models sometimes wrap SQL in ```sql fences or add trailing prose despite the
+    system prompt. Strip fences, take the first statement, and cut at the first semicolon.
+    """
+    t = text.strip()
+    if "```" in t:
+        # Take the content of the first fenced block.
+        parts = t.split("```")
+        if len(parts) >= 2:
+            block = parts[1]
+            if block.lower().startswith("sql"):
+                block = block[3:]
+            t = block.strip()
+    # Keep only up to the first statement terminator.
+    if ";" in t:
+        t = t.split(";", 1)[0]
+    return t.strip()
 
 
 def exec_match(pred_sql, gold_sql, db_path):
@@ -140,6 +171,15 @@ def main():
     @torch.no_grad()
     def generate(question, db_id):
         tables, fks = schema_lookup.get(db_id, ({}, []))
+        if args.causal:
+            messages = build_causal_messages(question, tables, fks)
+            prompt = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            enc = tok(prompt, return_tensors="pt", truncation=True, max_length=1024).to(device)
+            out = model.generate(**enc, max_new_tokens=args.max_out, num_beams=args.num_beams,
+                                  pad_token_id=tok.pad_token_id)
+            # Decode ONLY the newly generated tokens (drop the echoed prompt), then clean up.
+            gen = out[0][enc["input_ids"].shape[1]:]
+            return clean_sql(tok.decode(gen, skip_special_tokens=True))
         x = build_input(question, tables, fks)
         ids = tok(x, return_tensors="pt", truncation=True, max_length=512).input_ids.to(device)
         out = model.generate(ids, max_new_tokens=args.max_out, num_beams=args.num_beams)
