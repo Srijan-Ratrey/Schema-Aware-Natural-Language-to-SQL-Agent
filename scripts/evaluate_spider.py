@@ -72,28 +72,58 @@ def load_model(args):
     import torch
     from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM
 
-    AutoModel = AutoModelForCausalLM if args.causal else AutoModelForSeq2SeqLM
+    if args.causal:
+        return _load_causal(args, torch, AutoTokenizer, AutoModelForCausalLM)
 
+    # T5 / seq2seq path (small models — full precision on the available device is fine).
     if args.adapter:
         if not args.base_model:
             raise SystemExit("--adapter requires --base-model")
         from peft import PeftModel
         tok = AutoTokenizer.from_pretrained(args.base_model)
-        base = AutoModel.from_pretrained(args.base_model)
-        model = PeftModel.from_pretrained(base, args.adapter)
-        model = model.merge_and_unload()
+        base = AutoModelForSeq2SeqLM.from_pretrained(args.base_model)
+        model = PeftModel.from_pretrained(base, args.adapter).merge_and_unload()
     else:
         if not args.model:
             raise SystemExit("Provide --model (merged) or --base-model + --adapter")
         tok = AutoTokenizer.from_pretrained(args.model)
-        model = AutoModel.from_pretrained(args.model)
-
-    if args.causal and tok.pad_token is None:
-        tok.pad_token = tok.eos_token
+        model = AutoModelForSeq2SeqLM.from_pretrained(args.model)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device).eval()
     return tok, model, device
+
+
+def _load_causal(args, torch, AutoTokenizer, AutoModelForCausalLM):
+    """Load a decoder-only model for eval in 4-bit and attach the adapter WITHOUT merging.
+
+    A 7B model in fp32/fp16 won't fit a T4, and you can't merge a LoRA into a 4-bit base, so we
+    keep the adapter attached and let bitsandbytes hold the base in 4-bit (~6GB). device_map places
+    weights on the GPU, so we must NOT call .to() afterwards (that errors on quantized models).
+    """
+    if not torch.cuda.is_available():
+        raise SystemExit("--causal eval needs a CUDA GPU (bitsandbytes 4-bit is CUDA-only).")
+    from transformers import BitsAndBytesConfig
+
+    source = args.base_model or args.model
+    if not source:
+        raise SystemExit("Provide --base-model (+ --adapter) or --model for --causal eval.")
+    tok = AutoTokenizer.from_pretrained(source)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    # If a long-schema prompt exceeds max_length, truncate from the LEFT so the trailing
+    # "assistant" generation cue is kept (right-truncation would drop it and break generation).
+    tok.truncation_side = "left"
+    bnb = BitsAndBytesConfig(
+        load_in_4bit=True, bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.float16,
+    )
+    model = AutoModelForCausalLM.from_pretrained(source, quantization_config=bnb, device_map={"": 0})
+    if args.adapter:
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, args.adapter)
+    model.eval()
+    return tok, model, "cuda"
 
 
 def clean_sql(text):

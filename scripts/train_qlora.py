@@ -154,22 +154,31 @@ def main():
     model = get_peft_model(model, lora)
     model.print_trainable_parameters()
 
-    eos = tok.eos_token or ""
-
     def preprocess(ex):
         tables, fks = schema_lookup.get(ex["db_id"], ({}, []))
         messages = build_causal_messages(ex["question"], tables, fks)
-        # Prompt = system+user with the assistant turn opened but empty (generation prompt).
+        # Build prompt (assistant turn opened, empty) and the full conversation (assistant turn
+        # filled with the gold SQL) via the SAME chat template, so the special tokens / EOS are
+        # exactly what the model expects — don't hand-append tok.eos_token, which may not be the
+        # token the template uses to close a turn (e.g. Qwen uses <|im_end|>).
         prompt = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        full = prompt + ex["query"] + eos
+        full = tok.apply_chat_template(
+            messages + [{"role": "assistant", "content": ex["query"]}], tokenize=False,
+        )
 
         prompt_ids = tok(prompt, add_special_tokens=False)["input_ids"]
-        full_ids = tok(full, add_special_tokens=False, max_length=args.max_len, truncation=True)["input_ids"]
+        full_ids = tok(full, add_special_tokens=False)["input_ids"]
 
-        labels = list(full_ids)
         # Mask the prompt so loss is computed only on the SQL completion.
+        labels = list(full_ids)
         for i in range(min(len(prompt_ids), len(labels))):
             labels[i] = -100
+
+        # Truncate from the LEFT so the SQL completion (at the tail) is always preserved.
+        # Right-truncating could drop the entire response, leaving labels all -100 -> NaN loss.
+        if len(full_ids) > args.max_len:
+            full_ids = full_ids[-args.max_len:]
+            labels = labels[-args.max_len:]
         return {"input_ids": full_ids, "attention_mask": [1] * len(full_ids), "labels": labels}
 
     train_split = spider["train"]
@@ -180,9 +189,9 @@ def main():
     train_ds = train_split.map(preprocess, remove_columns=train_split.column_names)
     val_ds = spider["validation"].map(preprocess, remove_columns=spider["validation"].column_names)
 
-    # DataCollatorForSeq2Seq pads input_ids/attention_mask and pads labels with -100. It only adds
-    # decoder_input_ids for encoder-decoder models, so it's safe (and convenient) for causal LMs.
-    collator = DataCollatorForSeq2Seq(tok, model=model, label_pad_token_id=-100, padding=True)
+    # DataCollatorForSeq2Seq pads input_ids/attention_mask and pads labels with -100. Pass
+    # model=None so it never tries to build encoder-decoder decoder_input_ids — we're causal.
+    collator = DataCollatorForSeq2Seq(tok, model=None, label_pad_token_id=-100, padding=True)
 
     import inspect
     ta_params = inspect.signature(TrainingArguments.__init__).parameters
@@ -199,6 +208,7 @@ def main():
         fp16=True,           # Qwen trains fine in fp16 (unlike T5); T4 supports fp16 tensor cores.
         bf16=False,
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},  # avoids requires-grad error w/ PEFT
         optim="paged_adamw_8bit",   # bitsandbytes paged optimizer — keeps optimizer state small.
         dataloader_num_workers=args.dataloader_workers,
         save_strategy="epoch",
@@ -243,13 +253,18 @@ def main():
         tok.push_to_hub(args.push_to_hub)
 
     if args.merge_and_push:
-        # Merge requires the base in a mergeable (non-4bit) dtype; reload in fp16 and attach adapter.
-        print("Reloading base in fp16 and merging LoRA for a 16-bit push...")
+        # You can't merge a LoRA into a 4-bit base, so reload the base in fp16 and merge there.
+        # Do it on CPU: a 7B in fp16 (~14GB) won't fit alongside training state on a 15GB T4, and
+        # loading on CPU avoids fighting the GPU. NOTE: still needs ~14GB *system* RAM — on a
+        # free Colab (~13GB) this can OOM; if so, push the adapter instead (--push-to-hub) and
+        # merge later on a bigger machine, or use a smaller --base-model.
+        print("Reloading base in fp16 on CPU and merging LoRA for a 16-bit push...")
         from peft import PeftModel
         del model
         torch.cuda.empty_cache()
         base = AutoModelForCausalLM.from_pretrained(
-            args.base_model, torch_dtype=torch.float16, device_map={"": 0},
+            args.base_model, torch_dtype=torch.float16,
+            device_map="cpu", low_cpu_mem_usage=True,
         )
         merged = PeftModel.from_pretrained(base, args.output_dir).merge_and_unload()
         print(f"Pushing merged model to {args.merge_and_push}")
