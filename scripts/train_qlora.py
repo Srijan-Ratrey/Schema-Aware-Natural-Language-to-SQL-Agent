@@ -36,8 +36,13 @@ Install deps first (Colab):
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+# Let the CUDA allocator grow segments instead of fragmenting — helps fit the large fp32 logits
+# buffer the loss step needs on a big-vocab model. Must be set before torch initializes CUDA.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 # Make `src` importable whether run from repo root or scripts/.
 REPO_ROOT = Path(__file__).resolve().parent.parent
