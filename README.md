@@ -41,11 +41,12 @@ Schema-Aware-NL2SQL/
 │   └── schema_retriever.py            # Database schema extraction
 │
 ├── 📂 docs/                           # Documentation
-│   ├── README.md                      # Detailed documentation
 │   ├── API_DOCUMENTATION.md           # API reference
-│   ├── SETUP_COMPLETE.md              # Setup guide
 │   ├── ENVIRONMENT_SETUP.md           # Environment guide
-│   └── GITHUB_SETUP.md                # GitHub integration
+│   ├── GAP_ANALYSIS.md                # Repo vs. walkthrough analysis
+│   ├── NL2SQL_WALKTHROUGH.md          # Fine-tuning → demo walkthrough
+│   ├── CUSTOM_DATABASE_GUIDE.md       # Connecting your own DB
+│   └── TROUBLESHOOTING.md             # Common issues
 │
 ├── 📂 examples/                       # Example scripts
 │   ├── quickstart.py                  # Quick start demo
@@ -231,11 +232,12 @@ python -m pytest tests/test_nl2sql_agent.py -v
 
 ## 📚 Documentation
 
-- 📖 [Complete Setup Guide](docs/SETUP_COMPLETE.md)
 - 🔗 [API Documentation](docs/API_DOCUMENTATION.md)
+- 🔧 [Environment Setup](docs/ENVIRONMENT_SETUP.md)
+- 🗃️ [Custom Database Guide](docs/CUSTOM_DATABASE_GUIDE.md)
+- 🧭 [Fine-tuning → Demo Walkthrough](docs/NL2SQL_WALKTHROUGH.md)
 - 🐳 [Deployment Guide](scripts/deploy.sh)
 - 🧪 [Testing Guide](scripts/run_tests.sh)
-- 🔧 [Environment Setup](docs/ENVIRONMENT_SETUP.md)
 
 ## 🔗 Related Resources
 

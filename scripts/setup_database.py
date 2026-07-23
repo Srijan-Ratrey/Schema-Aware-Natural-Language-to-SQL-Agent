@@ -43,16 +43,21 @@ def setup_database():
             print("Warning: schema.sql not found in data directory")
             return False
         
-        # Read and execute sample data (SQLite version)
-        data_file = data_dir / "sample-data-sqlite.sql"
+        # Read and execute sample data (SQLite version).
+        # Prefer the de-duplicated dataset that ships with the repo; fall back to the
+        # name produced by scripts/convert_sql_data.py if present.
+        data_file = data_dir / "sample-data-sqlite-nodup.sql"
+        if not data_file.exists():
+            data_file = data_dir / "sample-data-sqlite.sql"
         if data_file.exists():
-            print("Loading sample data...")
+            print(f"Loading sample data from {data_file.name}...")
             with open(data_file, 'r') as f:
                 data_sql = f.read()
                 cursor.executescript(data_sql)
             print("Sample data loaded successfully!")
         else:
-            print("Warning: sample-data-sqlite.sql not found in data directory")
+            print("Warning: no sample data file found in data directory "
+                  "(expected sample-data-sqlite-nodup.sql)")
             return False
         
         # Commit changes
@@ -64,10 +69,11 @@ def setup_database():
         tables = cursor.fetchall()
         print(f"Created tables: {[table[0] for table in tables]}")
         
-        # Show record counts
+        # Show record counts. Quote the table name — some tables (e.g. "Order") are
+        # reserved SQL keywords and fail an unquoted FROM clause.
         for table in tables:
             table_name = table[0]
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+            cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
             count = cursor.fetchone()[0]
             print(f"  {table_name}: {count} records")
         

@@ -60,7 +60,10 @@ class BatchQueryRequest(BaseModel):
 
 class ModelConfig(BaseModel):
     """Model configuration"""
-    model_name: str = Field("mrm8488/t5-base-finetuned-wikiSQL", description="Hugging Face model name")
+    # protected_namespaces=() silences pydantic v2's warning about the `model_` prefix.
+    model_config = {"protected_namespaces": ()}
+    model_name: str = Field("gaussalgo/T5-LM-Large-text2sql-spider",
+                            description="Hugging Face model name")
 
 class SQLExecuteRequest(BaseModel):
     """Direct SQL execution request"""
